@@ -1,0 +1,27 @@
+name: Bülten kaydı
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: snapshot
+jobs:
+  snap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kayıt dalını al
+        run: |
+          git clone --depth 1 --branch data "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" d || (mkdir d && cd d && git init -b data && git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}")
+      - uses: actions/checkout@v4
+        with: { path: app, sparse-checkout: tools }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Bülteni kaydet
+        working-directory: d
+        run: node ../app/tools/snapshot.mjs
+      - name: Gönder (geçmiş tutmadan)
+        working-directory: d
+        run: |
+          git config user.name "bulten-bot"; git config user.email "bulten-bot@users.noreply.github.com"
+          git checkout --orphan tmp && git add -A && git commit -qm "Bülten kaydı $(date -u +%FT%TZ)" && git branch -M tmp data && git push -f origin data
