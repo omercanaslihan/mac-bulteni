@@ -100,6 +100,15 @@ section.method p{margin:0;font-size:13.5px;color:var(--muted)}
 .live button,.loadAll{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:4px 12px;cursor:pointer}
 .loadAll{margin:0 14px 10px}
 .tag.gone{color:var(--bad)}
+.ok{color:var(--good);font-weight:700} .no{color:var(--bad);font-weight:700}
+.tag.sc{color:var(--ink);font-family:var(--f-mono);font-size:11.5px;letter-spacing:0}
+.tag.sc.lv{color:var(--good)}
+.afbox{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-top:8px;font-size:13px}
+.afbox input{font:inherit;font-size:14px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);min-width:0;flex:1 1 220px;max-width:340px}
+.afbox button{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:4px 12px;cursor:pointer}
+.sum{margin:0 16px 10px;font-size:13.5px}
+.afbox[hidden]{display:none}
+#afMsg{font-size:12.5px;color:var(--muted)}
 tr:has(.gone) td{opacity:.75}
 .bar{height:4px;background:var(--soft);border-radius:2px;overflow:hidden;flex:1 1 120px;max-width:220px}
 .bar i{display:block;height:100%;background:var(--model);width:0;transition:width .2s}
@@ -114,7 +123,8 @@ tr:has(.gone) td{opacity:.75}
     <p class="eyebrow" id="stamp"></p>
     <h1>Maç Bülteni</h1>
     <p class="lede">iddaa bültenindeki bütün futbol maçları ve bütün seçenekleri. İki ayrı işaret var: <span class="st">★ model</span> büyük 7 ligde takım şutu ve isabetli şutta istatistik modelimizin iddaa marjını aştığı oranlar. <span class="di">◆ piyasa</span> ise iddaa'nın bir seçeneği kendi MS ve 2,5 alt/üst oranlarıyla tutarsız biçimde, yani olması gerekenden yüksek fiyatladığı yerler; her ligde çalışır. Araştırma ve takip aracıdır, bahis tavsiyesi değildir.</p>
-    <div class="live" id="live" role="status"><span class="dot"></span><span id="liveT">iddaa bülteni alınıyor…</span><span class="bar" id="liveBar"><i></i></span><button type="button" id="reload" hidden>Yenile</button></div>
+    <div class="live" id="live" role="status"><span class="dot"></span><span id="liveT">iddaa bülteni alınıyor…</span><span class="bar" id="liveBar"><i></i></span><button type="button" id="reload" hidden>Yenile</button><button type="button" id="afBtn" hidden>Skorlar</button></div>
+    <div class="afbox" id="afBox" hidden><label for="afKey">API-Football anahtarı</label><input id="afKey" type="password" autocomplete="off" spellcheck="false" placeholder="dashboard.api-football.com → My Access"><button type="button" id="afSave">Kaydet</button><button type="button" id="afDel">Sil</button><span id="afMsg"></span></div>
     <div class="stats">
       <div><b id="sM"></b>maç</div><div><b id="sL"></b>lig</div><div><b id="sO"></b>seçenek</div>
       <div><b id="sS" class="st"></b>★ model</div><div><b id="sD" class="di"></b>◆ piyasa</div>
@@ -133,6 +143,7 @@ tr:has(.gone) td{opacity:.75}
   <div class="panel">
     <div class="panel-head"><h2>Günün net tercihleri</h2><p>Her maçın bankosu: oranı en az <span id="minOtxt"></span> olan seçenekler içinde gerçekleşme olasılığı en yüksek tercih. Olasılık sırasına dizili. Olasılık en iyi tahminimizdir (piyasa + model). Fark negatifse iddaa'nın payı içeride demektir: banko kesin değildir, %75'lik bir tercih dört maçta bir kaybeder.</p></div>
     <p class="warn" style="margin:0 16px 10px">Geçmiş test (7 lig, 2.317 maç, aynı kural): bankolar <b>%70,4</b> tuttu, bizim tahminimiz %69,7'ydi. Olasılıklar güvenilir, ama ortalama oran 1,39 olduğu için her bankoya düz oynamak iddaa oranlarıyla yaklaşık %10 zarar ettirdi.</p>
+    <p class="sum" id="topsSum" hidden></p>
     <div class="tbl"><table class="list"><thead><tr><th>Saat</th><th>Maç</th><th>Tercih</th><th>Olasılık</th><th>Oran</th><th>Fark</th></tr></thead><tbody id="tops"></tbody></table></div>
     <button type="button" class="more" id="moreT" hidden>Daha fazla göster</button>
   </div>
@@ -188,7 +199,19 @@ function startApp(BULTEN){
   const odd=o=>o>1.01?o.toFixed(2):'–';
   const now=Date.now()/1000;
   const fTs=new Intl.DateTimeFormat('tr-TR',{timeZone:TZ,hour:'2-digit',minute:'2-digit'});
-  const when=e=>fT.format(new Date(e.d*1000))+(e.d<now?`<br><span class="tag gone">${e.d<now-7200?'oynandı':'başladı'}</span>`:'');
+  // Skorlar (API-Football): e.res = {st, el, gh, ga, fh, fa, hh, ha}
+  const FIN=new Set(['FT','AET','PEN']), LIVE=new Set(['1H','HT','2H','ET','BT','P','LIVE','INT']);
+  const STTR={NS:'başlamadı',PST:'ertelendi',CANC:'iptal',ABD:'yarıda kaldı',AWD:'hükmen',WO:'hükmen',SUSP:'durduruldu',TBD:'saat belli değil'};
+  const FTONLY=new Set(['1_1','2_92','2_100','2_101','2_603','2_604','2_7','2_89','2_91','2_698','2_700','2_4','2_86','2_11','2_643','2_644']);
+  function settle(e,k,s,n){ const r=e.res; if(!r||!FIN.has(r.st)||r.fh==null||!BLD.GOALKEYS.has(k)) return null;
+    let st=null; if(r.hh!=null&&r.ha!=null) st=[r.hh,r.ha,r.fh-r.hh,r.fa-r.ha]; else if(FTONLY.has(k)) st=[0,0,r.fh,r.fa]; if(!st) return null;
+    const v=BLD.goalPred(k,n,s,st,1); return v===undefined?null:v; }
+  const mark=v=>v===true?' <span class="ok" title="Tuttu">✓</span>':v===false?' <span class="no" title="Yattı">✗</span>':'';
+  function scoreTag(e){ const r=e.res; if(!r) return e.d<now?`<span class="tag gone">${e.d<now-7200?'oynandı':'başladı'}</span>`:'';
+    if(FIN.has(r.st)) return `<span class="tag sc">${r.fh}–${r.fa}${r.hh!=null?` (İY ${r.hh}–${r.ha})`:''}${r.st!=='FT'?' · uzatma':''}</span>`;
+    if(LIVE.has(r.st)) return `<span class="tag sc lv">${r.st==='HT'?'devre':(r.el??'')+"'"} ${r.gh??0}–${r.ga??0}</span>`;
+    return STTR[r.st]?`<span class="tag gone">${STTR[r.st]}</span>`:(e.d<now?`<span class="tag gone">başladı</span>`:''); }
+  const when=e=>{ const t=scoreTag(e); return fT.format(new Date(e.d*1000))+(t?'<br>'+t:''); };
   function mTitle(k,s){ let n=N[k]||k; if(k==='2_100'||k==='2_863'||k==='2_864'){ const v=+s; n=n.replace('{h}','· ev '+(v>0?'+':'')+String(v).replace('.',',')); }
     return n.replace('{0}',s!=null?String(s).replace('.',','):'').replace('{1}','').replace(/\s+/g,' ').trim(); }
   const eM=o=>o[2]==null||o[1]<=1.01?null:o[2]*o[1]-1;   // model edge
@@ -264,7 +287,7 @@ function startApp(BULTEN){
   ligS.onchange=()=>{ lig=ligS.value; render(); };
   const vis=e=>(lig?e.cn===lig:(scope==='all'||e.big))&&(!days.size||days.has(e.day))&&(!q||(e.h+' '+e.a+' '+e.cn).toLocaleLowerCase('tr').includes(q))&&(!onlyMark||e.ns||e.nd);
   function selLabel(e,k,s,o){ if(k==='2_912') return 'Şut · '+o[0]; if(k==='2_913') return 'İsabetli şut · '+o[0]; if(k==='2_822') return e.h+' korner '+String(s).replace('.',',')+' '+o[0]; if(k==='2_823') return e.a+' korner '+String(s).replace('.',',')+' '+o[0]; return mTitle(k,s)+' · '+o[0]; }
-  function listRows(arr,kind,limit){ return arr.slice(0,limit).map(({e,k,s,o,ed})=>`<tr class="${kind}"><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><span class="${kind==='star'?'st':'di'}">${kind==='star'?'★':'◆'}</span> ${selLabel(e,k,s,o)}</td><td class="num">${pct(kind==='star'?o[2]:o[3])}</td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${kind==='star'?'p':'d'}">+${Math.round(ed*100)}%</td></tr>`).join(''); }
+  function listRows(arr,kind,limit){ return arr.slice(0,limit).map(({e,k,s,o,ed})=>`<tr class="${kind}"><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><span class="${kind==='star'?'st':'di'}">${kind==='star'?'★':'◆'}</span> ${selLabel(e,k,s,o)}${mark(settle(e,k,s,o[0]))}</td><td class="num">${pct(kind==='star'?o[2]:o[3])}</td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${kind==='star'?'p':'d'}">+${Math.round(ed*100)}%</td></tr>`).join(''); }
   let dLimit=40, tLimit=30, sLimit=30, minO=1.30, preset=7;
   document.getElementById('moreD').onclick=()=>{dLimit+=60; render();};
   document.getElementById('moreT').onclick=()=>{tLimit+=40; render();};
@@ -272,7 +295,7 @@ function startApp(BULTEN){
   const mOI=document.getElementById('minO'); mOI.value=minO.toFixed(2); mOI.onchange=()=>{ const v=parseFloat(String(mOI.value).replace(',','.')); if(v>=1.01&&v<=10){minO=v;} mOI.value=minO.toFixed(2); render(); };
   const pS=document.getElementById('preset'); pS.innerHTML=PRESETS.map((p,i)=>`<option value="${i}">${p[0]}</option>`).join(''); pS.value=preset; pS.onchange=()=>{preset=+pS.value; sLimit=30; render();};
   const pick=(x,kind)=>{ const {e,k,s,o,p}=x; const ed=p*o[1]-1; const st=isStar(e,k,o), di=isDia(e,k,o);
-    return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><b>${shortLabel(e,k,s,o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}</td><td class="num"><b>${pct(p)}</b></td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${ed>0?'d':''}">${ed>0?'+':''}${Math.round(ed*100)}%</td></tr>`; };
+    return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><b>${shortLabel(e,k,s,o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}${mark(settle(e,k,s,o[0]))}</td><td class="num"><b>${pct(p)}</b></td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${ed>0?'d':''}">${ed>0?'+':''}${Math.round(ed*100)}%</td></tr>`; };
   function cells(e,k,o){ const st=isStar(e,k,o), di=isDia(e,k,o); const m=eM(o), f=eF(o);
     let diff='<td class="na">–</td>'; if(e.big&&m!=null&&TRUST_A.has(k)) diff=`<td class="diff ${m>0?'p':''}">${m>0?'+':''}${Math.round(m*100)}%</td>`; else if(f!=null) diff=`<td class="diff ${f>0?'d':''}">${f>0?'+':''}${Math.round(f*100)}%</td>`;
     return `<tr${st?' class="star"':di?' class="dia"':''}><td>${st?'<span class="st" title="Model: değerli">★</span> ':''}${di?'<span class="di" title="Piyasa içi fark">◆</span> ':''}${o[0]}</td>${e.big?`<td class="num">${o[2]==null?'<span class="na">–</span>':pct(o[2])}</td>`:''}<td class="num">${o[3]==null?'<span class="na">–</span>':pct(o[3])}</td><td class="num">${odd(o[1])}</td>${diff}</tr>`; }
@@ -288,9 +311,9 @@ function startApp(BULTEN){
     const nOther=e.m.filter(x=>!grouped.has(x[0])).reduce((s,x)=>s+x[2].length,0); const nOut=e.m.reduce((s,x)=>s+x[2].length,0);
     return `<article class="card" data-i="${e.i}"><div class="ch"><div><div class="t">${e.h} – ${e.a}</div>
         ${e.ns?`<span class="pill s">★ ${e.ns}</span>`:''}${e.nd?`<span class="pill d">◆ ${e.nd}</span>`:''}${e.few?'<span class="pill few">az veri</span>':''}${e.snap?`<span class="pill nm" title="Maç başladığı için iddaa listeden çıkardı; bu oranlar cihazına kaydedilen son oranlar">${e.d<now-7200?'Oynandı':'Başladı'} · oranlar ${fTs.format(new Date(e.snap*1000))}</span>`:''}${!e.mx?'<span class="pill nm" title="Maç sonucu veya 2,5 alt/üst oranı yok">adil fiyat yok</span>':''}</div>
-        <div class="meta"><span class="num">${fT.format(new Date(e.d*1000))}</span><br>${nOut} seçenek</div></div>
+        <div class="meta"><span class="num">${fT.format(new Date(e.d*1000))}</span><br>${scoreTag(e)||nOut+' seçenek'}</div></div>
       ${e.xg?`<div class="kv"><span>${e.big?'xG':'Piyasa gol beklentisi'} <b>${(+e.xg[0]).toFixed(2)} – ${(+e.xg[1]).toFixed(2)}</b></span>${m&&m.sh?`<span>Şut <b>${m.sh[0]} – ${m.sh[1]}</b></span><span>İsabetli <b>${m.sot[0]} – ${m.sot[1]}</b></span><span>Korner <b>${m.co[0]} – ${m.co[1]}</b></span>`:''}</div>`:''}
-      ${(()=>{ const b=banko(e,minO); return b?`<div class="banko"><span class="tag">Banko</span> <b>${shortLabel(e,b.k,b.s,b.o[0])}</b> <span class="num">${pct(b.p)} · ${b.o[1].toFixed(2)}</span></div>`:''; })()}
+      ${(()=>{ const b=banko(e,minO); return b?`<div class="banko"><span class="tag">Banko</span> <b>${shortLabel(e,b.k,b.s,b.o[0])}</b> <span class="num">${pct(b.p)} · ${b.o[1].toFixed(2)}</span>${mark(settle(e,b.k,b.s,b.o[0]))}</div>`:''; })()}
       ${e.full||e.snap?'':`<button type="button" class="loadAll" data-i="${e.i}">Tüm pazarları getir</button>`}
       ${groups}${nOther?`<details class="g" data-e="${e.i}" data-g="Diğer"><summary><span>Oyuncu ve özel bahisler</span><span class="tag">${nOther} · hesap yok</span></summary></details>`:''}
     </article>`; }
@@ -302,6 +325,10 @@ function startApp(BULTEN){
     const B=D.events.filter(e=>vis(e)).map(e=>banko(e,minO)).filter(Boolean).sort((a,b)=>b.p-a.p);
     document.getElementById('tops').innerHTML=B.length?B.slice(0,tLimit).map(x=>pick(x)).join(''):'<tr><td colspan="6" class="empty">Bu filtrede tercih yok.</td></tr>';
     document.getElementById('moreT').hidden=B.length<=tLimit;
+    { const S=B.map(x=>({x,v:settle(x.e,x.k,x.s,x.o[0])})).filter(y=>y.v!=null); const el=document.getElementById('topsSum');
+      if(S.length){ const w=S.filter(y=>y.v).length; const u=S.reduce((t,y)=>t+(y.v?y.x.o[1]-1:-1),0);
+        el.innerHTML=`Biten maçlarda bankolar: <b>${w}/${S.length}</b> tuttu (%${Math.round(100*w/S.length)}). Bu tercihler beklenen ortalama %${Math.round(100*S.reduce((t,y)=>t+y.x.p,0)/S.length)} idi. Her birine 1 birim, iddaa oranıyla: <b class="${u>=0?'ok':'no'}">${u>=0?'+':''}${u.toFixed(2).replace('.',',')} birim</b>.`; el.hidden=false; }
+      else el.hidden=true; }
     // pazar arama
     const [pl,pk,ps,pn]=PRESETS[preset]; const SR=[];
     for(const e of D.events){ if(!vis(e)) continue; for(const [k,s,os] of e.m){ if(k!==pk||(ps!=null&&String(s)!==ps)) continue; for(const o of os){ if(o[0]!==pn||o[1]<minO) continue; const p=Pr(e,k,o); if(p!=null) SR.push({e,k,s,o,p}); } } }
@@ -331,6 +358,7 @@ function startApp(BULTEN){
     try{ const ne=await window.fetchFull(e); Object.assign(e,ne,{full:1}); recompute(); const art=b.closest('article'); art.outerHTML=card(e); }
     catch(err){ b.disabled=false; b.textContent='Alınamadı, tekrar dene'; } });
   render();
+  window.__app={D,render};
 }
 </script>
 <script src="builder.js"></script>
@@ -378,7 +406,39 @@ function startApp(BULTEN){
       say('iddaa bültenine ulaşılamadı ('+err.message+'). İnternet bağlantını kontrol et. Türkiye dışından erişim engelli olabilir.','err'); RL.hidden=false; RL.textContent='Tekrar dene'; document.getElementById('liveBar').hidden=true;
     }
   }
-  boot();
+  // ---- Skorlar: API-Football (anahtar sadece bu cihazda saklanır) ----
+  const AF='https://v3.football.api-sports.io';
+  const ls={ get:k=>{ try{return localStorage.getItem(k);}catch(e){return null;} }, set:(k,v)=>{ try{localStorage.setItem(k,v);}catch(e){} }, del:k=>{ try{localStorage.removeItem(k);}catch(e){} } };
+  const afBox=document.getElementById('afBox'), afKey=document.getElementById('afKey'), afMsg=document.getElementById('afMsg'), afBtn=document.getElementById('afBtn');
+  afBtn.onclick=()=>{ afBox.hidden=!afBox.hidden; afKey.value=ls.get('mb_afkey')||''; };
+  document.getElementById('afSave').onclick=()=>{ const k=afKey.value.trim(); if(!k){ afMsg.textContent='Anahtarı yapıştır.'; return; } ls.set('mb_afkey',k); afMsg.textContent='Kaydedildi, skorlar alınıyor…'; runScores(true); };
+  document.getElementById('afDel').onclick=()=>{ ls.del('mb_afkey'); afKey.value=''; afMsg.textContent='Anahtar bu cihazdan silindi.'; };
+  const dayOf=t=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Istanbul'}).format(new Date(t*1000));
+  async function afDay(day,key,force){ const ck='mb_af_'+day; let c=null; try{ c=JSON.parse(ls.get(ck)||'null'); }catch(e){}
+    const today=dayOf(Date.now()/1000); const fresh=c&&((day!==today&&c.done)||(Date.now()-c.t<8*60e3));
+    if(c&&fresh&&!force) return {fx:c.fx,cached:true};
+    const r=await fetch(AF+'/fixtures?date='+day+'&timezone=Europe/Istanbul',{headers:{'x-apisports-key':key}});
+    const j=await r.json().catch(()=>null); if(!r.ok||!j) throw new Error('HTTP '+r.status);
+    const errs=j.errors&&(Array.isArray(j.errors)?j.errors.length:Object.keys(j.errors).length)?j.errors:null;
+    if(errs) throw new Error(Object.values(errs).join(' '));
+    const fx=(j.response||[]).map(f=>{ const st=f.fixture.status.short, fin=['FT','AET','PEN'].includes(st); const ft=f.score&&f.score.fulltime||{}, ht=f.score&&f.score.halftime||{};
+      return [f.fixture.timestamp,f.teams.home.name,f.teams.away.name,st,f.fixture.status.elapsed,f.goals.home,f.goals.away,fin?(ft.home??f.goals.home):null,fin?(ft.away??f.goals.away):null,ht.home,ht.away]; });
+    const done=fx.length>0&&fx.every(f=>!['NS','1H','HT','2H','ET','BT','P','LIVE','INT','SUSP','TBD'].includes(f[3]));
+    ls.set(ck,JSON.stringify({t:Date.now(),done,fx})); return {fx,cached:false,left:r.headers.get('x-ratelimit-requests-remaining')}; }
+  function attach(events,fx){ const byT=new Map(); for(const f of fx){ const b=Math.round(f[0]/600); for(const k of [b-3,b-2,b-1,b,b+1,b+2,b+3]){ if(!byT.has(k)) byT.set(k,[]); byT.get(k).push(f); } }
+    let n=0; for(const e of events){ if(e.d>Date.now()/1000+600) continue; const C=byT.get(Math.round(e.d/600))||[]; let best=null,bs=0;
+      for(const f of C){ if(Math.abs(f[0]-e.d)>1800) continue; const a=BLD.simName(e.h,f[1]), b=BLD.simName(e.a,f[2]); const sc=(a>0&&b>0)?a+b+2:(a+b>=2?a+b:0); if(sc>bs){bs=sc;best=f;} }
+      if(best){ e.res={st:best[3],el:best[4],gh:best[5],ga:best[6],fh:best[7],fa:best[8],hh:best[9],ha:best[10]}; n++; } } return n; }
+  async function runScores(force){ const key=ls.get('mb_afkey'); afBtn.hidden=false; if(!key||!window.__app) return;
+    const D=window.__app.D; const now=Date.now()/1000; const days=[...new Set(D.events.filter(e=>e.d<now+600).map(e=>dayOf(e.d)))].sort().slice(-2);
+    if(!days.length){ afMsg.textContent='Henüz başlamış maç yok.'; return; }
+    try{ let fx=[],left=null; for(const d of days){ const r=await afDay(d,key,force); fx=fx.concat(r.fx); if(r.left!=null) left=r.left; }
+      const n=attach(D.events,fx); window.__app.render();
+      afMsg.textContent=`${fx.length} maçın skoru alındı, ${n} tanesi bültenle eşleşti.${left!=null?` Bugün kalan istek: ${left}.`:''}`;
+      if(!fx.length) afMsg.textContent='API bu gün için maç döndürmedi. Ücretsiz plan güncel sezonu kapsamıyor olabilir.';
+    }catch(err){ afMsg.textContent='Skorlar alınamadı: '+err.message; afBox.hidden=false; } }
+  window.__runScores=runScores;
+  boot().then(()=>runScores(false));
   if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();
 </script>

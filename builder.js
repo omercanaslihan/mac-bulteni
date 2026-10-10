@@ -165,5 +165,9 @@
     return e;
   }
 
-  root.BLD = { buildEvent, devig, implied, goalStates, goalProb, goalPred, fitHT, matchTeam, norm, modelProbs, GOALKEYS };
+  // İki takım adının benzerliği (0 = alakasız, 10 = aynı)
+  function simName(x, y) { const a = alias(norm(x)), b = alias(norm(y)); if (!a || !b) return 0; if (a === b) return 10;
+    const A = a.split(' ').filter(w => w.length > 2), B = b.split(' ').filter(w => w.length > 2); let s = 0;
+    for (const w of B) if (A.some(v => v.startsWith(w.slice(0, 5)) || w.startsWith(v.slice(0, 5)))) s += 1; return s; }
+  root.BLD = { simName, buildEvent, devig, implied, goalStates, goalProb, goalPred, fitHT, matchTeam, norm, modelProbs, GOALKEYS };
 })(typeof window !== 'undefined' ? window : globalThis);
