@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1D6A50">
+<meta name="description" content="iddaa bültenindeki maçlar için istatistik ve piyasa olasılıkları.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Maç Bülteni">
+<title>Maç Bülteni</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: başlık → filtre şeridi → ★ ve ◆ listeleri → lig grupları (maç kartları, pazar grupları açılır) → yöntem */
+:root{
+  --bg:#EDF0EB; --surface:#FBFCFA; --ink:#16211B; --muted:#5B685F; --line:#D3DBD3; --soft:#E3E8E2;
+  --model:#1D6A50; --star:#B0650C; --starbg:#FBEBD5; --dia:#2F5D9A; --diabg:#E1EAF5; --good:#1D6A50; --bad:#9A3B22; --warnbg:#F6E7D3;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1411; --surface:#151D18; --ink:#E4EBE5; --muted:#93A198; --line:#29342D; --soft:#1C2620;
+  --model:#5DBB95; --star:#F0B866; --starbg:#3A2A14; --dia:#8FB4E8; --diabg:#1B2A3D; --good:#7FD3AE; --bad:#E07A5F; --warnbg:#33281A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1411; --surface:#151D18; --ink:#E4EBE5; --muted:#93A198; --line:#29342D; --soft:#1C2620;
+  --model:#5DBB95; --star:#F0B866; --starbg:#3A2A14; --dia:#8FB4E8; --diabg:#1B2A3D; --good:#7FD3AE; --bad:#E07A5F; --warnbg:#33281A; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;margin:0}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:20px 56px;display:flex;flex-direction:column;gap:18px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(34px,6vw,52px);line-height:.95;margin:4px 0 0}
+h2{font:700 24px var(--f-display);margin:0}
+.lede{color:var(--muted);max-width:72ch;margin:8px 0 0;font-size:14px}
+.st{color:var(--star);font-weight:700} .di{color:var(--dia);font-weight:700}
+.stats{display:flex;flex-wrap:wrap;gap:10px 28px;margin-top:12px}
+.stats div{font-size:12px;color:var(--muted)} .stats b{display:block;font:600 22px var(--f-mono);color:var(--ink)}
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{font:500 13px var(--f-body);background:var(--surface);color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 11px;cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.controls input[type=search]{font:inherit;font-size:14px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);min-width:0;flex:1 1 180px;max-width:300px}
+.tog{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--model);outline-offset:2px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.panel-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 16px;padding:14px 16px 8px}
+.panel-head p{margin:0;font-size:13px;color:var(--muted);max-width:72ch}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;white-space:normal;min-width:150px}
+.list th:nth-child(-n+3),.list td:nth-child(-n+3){text-align:left}
+thead th{font:600 11.5px var(--f-body);color:var(--muted);text-transform:uppercase;letter-spacing:.05em;background:var(--soft)}
+tbody tr:last-child td{border-bottom:0}
+tr.star td{background:var(--starbg)} tr.dia td{background:var(--diabg)}
+.diff{font-family:var(--f-mono);color:var(--muted)} .diff.p{color:var(--good)} .diff.d{color:var(--dia)}
+.tag{font:600 10.5px var(--f-body);text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.na{color:var(--muted)}
+.more{display:block;width:100%;padding:10px;border:0;border-top:1px solid var(--line);background:none;color:var(--model);font:500 13px var(--f-body);cursor:pointer}
+details.lg{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+details.lg>summary{cursor:pointer;list-style:none;padding:10px 14px;display:flex;gap:10px;align-items:baseline;justify-content:space-between}
+details.lg>summary::-webkit-details-marker{display:none}
+details.lg>summary .n{font:600 19px var(--f-display)}
+details.lg>summary::before{content:"▸";color:var(--muted)} details.lg[open]>summary::before{content:"▾"}
+.card{border-top:1px solid var(--line)}
+.ch{padding:10px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:start}
+.ch .t{font:600 19px/1.05 var(--f-display)}
+.ch .meta{font-size:12px;color:var(--muted);text-align:right;white-space:nowrap}
+.pill{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:999px;margin:4px 6px 0 0}
+.pill.few{background:var(--warnbg);color:var(--bad)} .pill.s{background:var(--starbg);color:var(--star)} .pill.d{background:var(--diabg);color:var(--dia)} .pill.nm{background:var(--soft);color:var(--muted)}
+.kv{display:flex;flex-wrap:wrap;gap:4px 16px;padding:0 14px 8px;font-size:12.5px;color:var(--muted)}
+.kv b{color:var(--ink);font-family:var(--f-mono);font-weight:500}
+details.g{border-top:1px dashed var(--line)}
+details.g>summary{cursor:pointer;padding:7px 14px 7px 26px;font-size:13.5px;font-weight:500;list-style:none;display:flex;justify-content:space-between;gap:10px}
+details.g>summary::-webkit-details-marker{display:none}
+details.g>summary::before{content:"▸";color:var(--muted);margin-right:6px} details.g[open]>summary::before{content:"▾"}
+details.g>summary span:first-child{flex:1}
+.mt{font:600 12px var(--f-body);color:var(--muted);padding:8px 10px 2px}
+.trust{font-size:11px;font-weight:500;color:var(--muted)}
+.empty{padding:16px;color:var(--muted);font-size:14px}
+.groups{display:flex;flex-direction:column;gap:10px}
+.warn{padding:8px 12px;border-radius:8px;background:var(--warnbg);color:var(--ink);font-size:13px}
+.banko{padding:0 14px 10px;font-size:13.5px} .banko b{color:var(--model)}
+.psel{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:0 16px 10px;font-size:13px}
+.psel select,#minO,#lig{font:inherit;font-size:14px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+#minO{width:76px}
+.tog{max-width:100%;min-width:0} #lig{min-width:0;max-width:calc(100vw - 100px)}
+section.method{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px 28px}
+section.method h2{grid-column:1/-1}
+section.method h4{margin:0 0 4px;font-size:14px}
+section.method p{margin:0;font-size:13.5px;color:var(--muted)}
+@media (max-width:560px){ .ch{grid-template-columns:minmax(0,1fr)} .ch .meta{text-align:left} }
+.live{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:12px;font-size:13px;color:var(--muted)}
+.live .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.live.ok .dot{background:var(--good)} .live.err .dot{background:var(--bad)} .live.err{color:var(--bad)}
+.live button,.loadAll{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:4px 12px;cursor:pointer}
+.loadAll{margin:0 14px 10px}
+.bar{height:4px;background:var(--soft);border-radius:2px;overflow:hidden;flex:1 1 120px;max-width:220px}
+.bar i{display:block;height:100%;background:var(--model);width:0;transition:width .2s}
+.boot .controls,.boot .panel,.boot .groups,.boot section.method,.boot .stats{display:none}
+@media (prefers-reduced-motion: reduce){.bar i{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap boot" id="wrap">
+  <header>
+    <p class="eyebrow" id="stamp"></p>
+    <h1>Maç Bülteni</h1>
+    <p class="lede">iddaa bültenindeki bütün futbol maçları ve bütün seçenekleri. İki ayrı işaret var: <span class="st">★ model</span> büyük 7 ligde takım şutu ve isabetli şutta istatistik modelimizin iddaa marjını aştığı oranlar. <span class="di">◆ piyasa</span> ise iddaa'nın bir seçeneği kendi MS ve 2,5 alt/üst oranlarıyla tutarsız biçimde, yani olması gerekenden yüksek fiyatladığı yerler; her ligde çalışır. Araştırma ve takip aracıdır, bahis tavsiyesi değildir.</p>
+    <div class="live" id="live" role="status"><span class="dot"></span><span id="liveT">iddaa bülteni alınıyor…</span><span class="bar" id="liveBar"><i></i></span><button type="button" id="reload" hidden>Yenile</button></div>
+    <div class="stats">
+      <div><b id="sM"></b>maç</div><div><b id="sL"></b>lig</div><div><b id="sO"></b>seçenek</div>
+      <div><b id="sS" class="st"></b>★ model</div><div><b id="sD" class="di"></b>◆ piyasa</div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="chips" id="scope" role="group" aria-label="Kapsam"><button type="button" data-k="big">Büyük 7 lig</button><button type="button" data-k="all">Tüm ligler</button></div>
+    <div class="chips" id="days" role="group" aria-label="Gün"></div>
+    <label class="tog" for="lig">Lig <select id="lig"></select></label>
+    <input type="search" id="q" placeholder="Takım veya lig ara" aria-label="Takım veya lig ara">
+    <label class="tog" for="minO">En düşük oran <input id="minO" type="number" min="1.01" max="10" step="0.05" inputmode="decimal"></label>
+    <label class="tog" for="onlyMark"><input type="checkbox" id="onlyMark"> Sadece ★ veya ◆ olan maçlar</label>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Günün net tercihleri</h2><p>Her maçın bankosu: oranı en az <span id="minOtxt"></span> olan seçenekler içinde gerçekleşme olasılığı en yüksek tercih. Olasılık sırasına dizili. Olasılık en iyi tahminimizdir (piyasa + model). Fark negatifse iddaa'nın payı içeride demektir: banko kesin değildir, %75'lik bir tercih dört maçta bir kaybeder.</p></div>
+    <p class="warn" style="margin:0 16px 10px">Geçmiş test (7 lig, 2.317 maç, aynı kural): bankolar <b>%70,4</b> tuttu, bizim tahminimiz %69,7'ydi. Olasılıklar güvenilir, ama ortalama oran 1,39 olduğu için her bankoya düz oynamak iddaa oranlarıyla yaklaşık %10 zarar ettirdi.</p>
+    <div class="tbl"><table class="list"><thead><tr><th>Saat</th><th>Maç</th><th>Tercih</th><th>Olasılık</th><th>Oran</th><th>Fark</th></tr></thead><tbody id="tops"></tbody></table></div>
+    <button type="button" class="more" id="moreT" hidden>Daha fazla göster</button>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Pazar arama</h2><p>Bir tercih seç; bütün maçlar o tercihin olasılığına göre sıralansın.</p></div>
+    <div class="psel"><label for="preset">Tercih</label><select id="preset"></select><span class="tag" id="srchN"></span></div>
+    <div class="tbl"><table class="list"><thead><tr><th>Saat</th><th>Maç</th><th>Tercih</th><th>Olasılık</th><th>Oran</th><th>Fark</th></tr></thead><tbody id="srch"></tbody></table></div>
+    <button type="button" class="more" id="moreS" hidden>Daha fazla göster</button>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2><span class="st">★</span> Model: değerli oranlar</h2><p>Takım şutu ve isabetli şut. Korner modeli geri testte fazla iddialı çıktı, yeniden ayarlanana kadar ★ vermiyor. Model olasılığı × oran − 1 en az %5, oran 1,50–3,50, iki takımın da yeterli verisi var.</p></div>
+    <div class="tbl"><table class="list"><thead><tr><th>Saat</th><th>Maç</th><th>Seçim</th><th>Model</th><th>Oran</th><th>Fark</th></tr></thead><tbody id="stars"></tbody></table></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2><span class="di">◆</span> Piyasa içi fark</h2><p>Maçın MS ve 2,5 alt/üst oranlarından çıkarılan adil olasılık × oran − 1 en az %3, oran 1,20–6,00. Model türev pazarları her zaman doğru fiyatlayamaz; özellikle alt liglerde ana oranlar da hatalı olabilir.</p></div>
+    <div class="tbl"><table class="list"><thead><tr><th>Saat</th><th>Maç</th><th>Seçim</th><th>Adil</th><th>Oran</th><th>Fark</th></tr></thead><tbody id="dias"></tbody></table></div>
+    <button type="button" class="more" id="moreD" hidden>Daha fazla göster</button>
+  </div>
+
+  <div class="groups" id="groups"></div>
+
+  <section class="method">
+    <h2>Nasıl okunur</h2>
+    <div><h4>★ Model</h4><p>Büyük 7 ligde (3.961 maç) takım bazlı şut, isabetli şut ve korner modeli. Geçmişte kalibre: "%40" dediğinde %40. Bu pazarlarda model iddaa'dan bağımsız bir görüş veriyor.</p></div>
+    <div><h4>◆ Piyasa</h4><p>iddaa'nın MS ve 2,5 alt/üst oranlarından marj temizlenip maçın gol beklentisi çıkarılıyor. Diğer bütün gol pazarları bu beklentiyle yeniden fiyatlanıyor. Fark pozitifse iddaa o seçeneği kendi ana pazarına göre cömert fiyatlamış demektir.</p></div>
+    <div><h4>Sütunlar</h4><p>"Model": istatistik modeli (sadece büyük 7 lig). "Adil": iddaa'nın ana oranlarından türetilen olasılık. "Fark" = olasılık × oran − 1. Oyuncu ve özel bahislerde hesap yok, sadece oran var.</p></div>
+    <div><h4>Uyarılar</h4><p>Hiçbir işaret henüz ileriye dönük sonuçla doğrulanmadı; ilk ölçüm bu hafta sonundan. Sakatlık, kadro ve motivasyon hesapta yok. Oranlar sayfadaki saatte alındı ve değişmiş olabilir.</p></div>
+  </section>
+</div>
+
+<script>
+function startApp(BULTEN){
+  const D=BULTEN, N=D.names;
+  const GROUPS=[
+    ['Maç sonucu',['1_1','2_92','2_100','2_11','2_643','2_644','2_87']],
+    ['Goller',['2_101','2_89','2_91','2_4','2_603','2_604','2_7','2_698','2_700']],
+    ['İlk yarı ve ikinci yarı',['2_88','2_77','2_60','2_720','2_719','2_722','2_723','2_724','2_699','2_90','2_36','2_821','2_6','2_84','2_85','2_69','2_72','2_727','2_728','2_861','2_862','2_729','2_730','2_866']],
+    ['Skorlar',['2_86','2_717','2_718']],
+    ['Korner',['2_822','2_823','2_48','2_49','2_52','2_53','2_863','2_864','2_67','2_68','2_737','2_56']],
+    ['Şut',['2_912','2_913']],
+    ['Kart, faul, ofsayt',['2_658','2_865','2_824','2_914','2_915','2_17']]];
+  const TRUST_A=new Set(['2_912','2_913']);  // korner: geri testte fazla iddialı, yeniden ayar bekliyor
+  const EXP=new Set(['2_658','2_865','2_824','2_914','2_915']);
+  const grouped=new Set(GROUPS.flatMap(g=>g[1]));
+  const TZ='Europe/Istanbul';
+  const fT=new Intl.DateTimeFormat('tr-TR',{timeZone:TZ,weekday:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  const fDay=new Intl.DateTimeFormat('tr-TR',{timeZone:TZ,weekday:'long',day:'numeric',month:'short'});
+  const dayKey=t=>new Intl.DateTimeFormat('en-CA',{timeZone:TZ}).format(new Date(t*1000));
+  const pct=p=>'%'+(p<0.1?(p*100).toFixed(1).replace('.',','):Math.round(p*100));
+  const odd=o=>o>1.01?o.toFixed(2):'–';
+  const now=Date.now()/1000;
+  function mTitle(k,s){ let n=N[k]||k; if(k==='2_100'||k==='2_863'||k==='2_864'){ const v=+s; n=n.replace('{h}','· ev '+(v>0?'+':'')+String(v).replace('.',',')); }
+    return n.replace('{0}',s!=null?String(s).replace('.',','):'').replace('{1}','').replace(/\s+/g,' ').trim(); }
+  const eM=o=>o[2]==null||o[1]<=1.01?null:o[2]*o[1]-1;   // model edge
+  const eF=o=>o[3]==null||o[1]<=1.01?null:o[3]*o[1]-1;   // market-implied edge
+  // Best-estimate probability: market-implied fair p blended with the stats model where the backtest showed it helps
+  const W_GOALS=new Set(['2_101','2_603','2_604','2_60','2_722','2_723','2_4','2_91','2_719']), W_KG=new Set(['2_89','2_700','2_720','2_821','2_866']);
+  const wOf=k=>W_GOALS.has(k)?0.4:W_KG.has(k)?0.25:(k==='1_1'||k==='2_92'||k==='2_100'||k==='2_7'||k==='2_698')?0.1:0;
+  function Pr(e,k,o){ if(e.big&&TRUST_A.has(k)) return o[2]; if(o[3]==null) return null; if(e.big&&o[2]!=null){ const w=wOf(k); return (1-w)*o[3]+w*o[2]; } return o[3]; }
+  const CORE=new Set(['1_1','2_92','2_100','2_101','2_89','2_700','2_603','2_604','2_60','2_88','2_77','2_7','2_698','2_722','2_723','2_90']);
+  const isStar=(e,k,o)=>e.big&&TRUST_A.has(k)&&!e.few&&o[2]!=null&&o[1]>=1.5&&o[1]<=3.5&&eM(o)>=0.05;
+  const isDia=(e,k,o)=>o[3]!=null&&o[1]>=1.2&&o[1]<=6&&eF(o)>=0.03;
+  let nO=0, STARS=[], DIAS=[];
+  function recompute(){ nO=0; const stars=[], dias=[];
+  for(const e of D.events){ e.ns=0; e.nd=0; e.day=dayKey(e.d);
+    for(const [k,s,os] of e.m) for(const o of os){ nO++; if(isStar(e,k,o)){e.ns++; stars.push({e,k,s,o,ed:eM(o)});} if(isDia(e,k,o)){e.nd++; dias.push({e,k,s,o,ed:eF(o)});} } }
+  const fam=p=>p.e.i+'|'+p.k+'|'+((p.k==='2_912'||p.k==='2_913')? p.o[0].replace(/ \d+\+$/,'') : p.o[0]);
+  const dedupe=arr=>{ arr.sort((a,b)=>b.ed-a.ed); const s=new Set(); return arr.filter(p=>{const f=fam(p); if(s.has(f)) return false; s.add(f); return true;}); };
+  STARS=dedupe(stars); DIAS=dedupe(dias); }
+  recompute();
+  const fl=v=>String(v).replace('.',',');
+  function shortLabel(e,k,s,n){
+    const ms=x=>x==='0'?'X':x;
+    switch(k){
+      case '1_1': return 'MS '+ms(n);
+      case '2_92': return 'Çifte şans '+({'1 ve 0':'1X','0 ve 2':'X2','1 ve 2':'12'}[n]||n);
+      case '2_101': return fl(s)+' '+n;
+      case '2_89': return 'KG '+n;
+      case '2_700': { const [a,b]=n.split(' ve '); return fl(s)+' '+a+' & KG '+b; }
+      case '2_603': return e.h+' '+fl(s)+' '+n;
+      case '2_604': return e.a+' '+fl(s)+' '+n;
+      case '2_60': return 'İY '+fl(s)+' '+n;
+      case '2_88': return 'İY '+ms(n);
+      case '2_77': return 'İY çifte şans '+({'1 ve 0':'1X','0 ve 2':'X2','1 ve 2':'12'}[n]||n);
+      case '2_7': { const [a,b]=n.split(' ve '); return 'MS '+ms(a)+' & '+fl(s)+' '+b; }
+      case '2_698': { const [a,b]=n.split(' ve '); return 'MS '+ms(a)+' & KG '+b; }
+      case '2_100': return 'Handikap (ev '+(+s>0?'+':'')+fl(s)+') '+ms(n);
+      case '2_722': return e.h+' İY '+fl(s)+' '+n;
+      case '2_723': return e.a+' İY '+fl(s)+' '+n;
+      case '2_90': return 'İY/MS '+n.split('/').map(ms).join('/');
+      case '2_912': return 'Şut · '+n; case '2_913': return 'İsabetli şut · '+n;
+      case '2_822': return e.h+' korner '+fl(s)+' '+n; case '2_823': return e.a+' korner '+fl(s)+' '+n;
+    } return mTitle(k,s)+' · '+n; }
+  function banko(e,minO){ let best=null; for(const [k,s,os] of e.m){ if(!(CORE.has(k)||(e.big&&!e.few&&TRUST_A.has(k)))) continue;
+      for(const o of os){ if(o[1]<minO||o[1]>6) continue; const p=Pr(e,k,o); if(p==null) continue; if(!best||p>best.p) best={e,k,s,o,p}; } } return best; }
+  const PRESETS=[
+    ['MS 1','1_1',null,'1'],['MS X','1_1',null,'0'],['MS 2','1_1',null,'2'],
+    ['Çifte şans 1X','2_92',null,'1 ve 0'],['Çifte şans X2','2_92',null,'0 ve 2'],['Çifte şans 12','2_92',null,'1 ve 2'],
+    ['1,5 Üst','2_101','1.5','Üst'],['2,5 Üst','2_101','2.5','Üst'],['3,5 Üst','2_101','3.5','Üst'],['2,5 Alt','2_101','2.5','Alt'],['3,5 Alt','2_101','3.5','Alt'],
+    ['KG Var','2_89',null,'Var'],['KG Yok','2_89',null,'Yok'],
+    ['KG Var & 2,5 Üst','2_700','2.5','Üst ve Var'],['KG Yok & 2,5 Alt','2_700','2.5','Alt ve Yok'],
+    ['MS 1 & 1,5 Üst','2_7','1.5','1 ve Üst'],['MS 2 & 1,5 Üst','2_7','1.5','2 ve Üst'],['MS 1 & KG Var','2_698',null,'1 ve Var'],['MS 2 & KG Var','2_698',null,'2 ve Var'],
+    ['İY 0,5 Üst','2_60','0.5','Üst'],['İY 1,5 Üst','2_60','1.5','Üst'],['İY 1','2_88',null,'1'],['İY 2','2_88',null,'2'],
+    ['İY/MS 1/1','2_90',null,'1/1'],['İY/MS 2/2','2_90',null,'2/2'],
+    ['Ev sahibi 0,5 Üst','2_603','0.5','Üst'],['Ev sahibi 1,5 Üst','2_603','1.5','Üst'],['Deplasman 0,5 Üst','2_604','0.5','Üst'],['Deplasman 1,5 Üst','2_604','1.5','Üst']];
+  const comps=[...new Set(D.events.map(e=>e.ci))];
+  document.getElementById('sM').textContent=D.events.length;
+  document.getElementById('sL').textContent=comps.length;
+  document.getElementById('sO').textContent=nO.toLocaleString('tr-TR');
+  document.getElementById('stamp').textContent='Bülten · oranlar '+new Intl.DateTimeFormat('tr-TR',{timeZone:TZ,day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}).format(new Date(D.built));
+  // filters
+  let scope='big', q='', onlyMark=false, days=new Set(), lig='';
+  const allDays=[...new Set(D.events.map(e=>e.day))].sort();
+  try{ const s=JSON.parse(localStorage.getItem('mb2')||'null'); if(s){ scope=s.scope||scope; onlyMark=!!s.o; } }catch(e){}
+  const save=()=>{ try{ localStorage.setItem('mb2',JSON.stringify({scope,o:onlyMark})) }catch(e){} };
+  const scC=document.getElementById('scope'); scC.onclick=ev=>{const b=ev.target.closest('button'); if(!b) return; scope=b.dataset.k; lig=''; ligS.value=''; save(); render();};
+  const dC=document.getElementById('days'); dC.innerHTML=allDays.map(d=>`<button type="button" data-k="${d}">${fDay.format(new Date(d+'T12:00:00Z'))}</button>`).join('');
+  dC.onclick=ev=>{const b=ev.target.closest('button'); if(!b) return; const k=b.dataset.k; days.has(k)?days.delete(k):days.add(k); render();};
+  const qI=document.getElementById('q'); let qt; qI.oninput=()=>{clearTimeout(qt); qt=setTimeout(()=>{q=qI.value.trim().toLocaleLowerCase('tr'); render();},200);};
+  const oM=document.getElementById('onlyMark'); oM.checked=onlyMark; oM.onchange=()=>{onlyMark=oM.checked; save(); render();};
+  const ligS=document.getElementById('lig'); { const cn=[...new Set(D.events.map(e=>e.cn))].sort((a,b)=>a.localeCompare(b,'tr',{sensitivity:'base'}));
+    const cnt={}; D.events.forEach(e=>cnt[e.cn]=(cnt[e.cn]||0)+1);
+    ligS.innerHTML='<option value="">Tüm ligler ('+cn.length+')</option>'+cn.sort((a,b)=>(a==='?')-(b==='?')).map(c=>`<option value="${c.replace(/"/g,'&quot;')}">${c==='?'?'Lig adı yok':c} (${cnt[c]})</option>`).join(''); }
+  ligS.onchange=()=>{ lig=ligS.value; render(); };
+  const vis=e=>(lig?e.cn===lig:(scope==='all'||e.big))&&(!days.size||days.has(e.day))&&(!q||(e.h+' '+e.a+' '+e.cn).toLocaleLowerCase('tr').includes(q))&&(!onlyMark||e.ns||e.nd);
+  function selLabel(e,k,s,o){ if(k==='2_912') return 'Şut · '+o[0]; if(k==='2_913') return 'İsabetli şut · '+o[0]; if(k==='2_822') return e.h+' korner '+String(s).replace('.',',')+' '+o[0]; if(k==='2_823') return e.a+' korner '+String(s).replace('.',',')+' '+o[0]; return mTitle(k,s)+' · '+o[0]; }
+  function listRows(arr,kind,limit){ return arr.slice(0,limit).map(({e,k,s,o,ed})=>`<tr class="${kind}"><td class="num">${fT.format(new Date(e.d*1000))}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><span class="${kind==='star'?'st':'di'}">${kind==='star'?'★':'◆'}</span> ${selLabel(e,k,s,o)}</td><td class="num">${pct(kind==='star'?o[2]:o[3])}</td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${kind==='star'?'p':'d'}">+${Math.round(ed*100)}%</td></tr>`).join(''); }
+  let dLimit=40, tLimit=30, sLimit=30, minO=1.30, preset=7;
+  document.getElementById('moreD').onclick=()=>{dLimit+=60; render();};
+  document.getElementById('moreT').onclick=()=>{tLimit+=40; render();};
+  document.getElementById('moreS').onclick=()=>{sLimit+=40; render();};
+  const mOI=document.getElementById('minO'); mOI.value=minO.toFixed(2); mOI.onchange=()=>{ const v=parseFloat(String(mOI.value).replace(',','.')); if(v>=1.01&&v<=10){minO=v;} mOI.value=minO.toFixed(2); render(); };
+  const pS=document.getElementById('preset'); pS.innerHTML=PRESETS.map((p,i)=>`<option value="${i}">${p[0]}</option>`).join(''); pS.value=preset; pS.onchange=()=>{preset=+pS.value; sLimit=30; render();};
+  const pick=(x,kind)=>{ const {e,k,s,o,p}=x; const ed=p*o[1]-1; const st=isStar(e,k,o), di=isDia(e,k,o);
+    return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${fT.format(new Date(e.d*1000))}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><b>${shortLabel(e,k,s,o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}</td><td class="num"><b>${pct(p)}</b></td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${ed>0?'d':''}">${ed>0?'+':''}${Math.round(ed*100)}%</td></tr>`; };
+  function cells(e,k,o){ const st=isStar(e,k,o), di=isDia(e,k,o); const m=eM(o), f=eF(o);
+    let diff='<td class="na">–</td>'; if(e.big&&m!=null&&TRUST_A.has(k)) diff=`<td class="diff ${m>0?'p':''}">${m>0?'+':''}${Math.round(m*100)}%</td>`; else if(f!=null) diff=`<td class="diff ${f>0?'d':''}">${f>0?'+':''}${Math.round(f*100)}%</td>`;
+    return `<tr${st?' class="star"':di?' class="dia"':''}><td>${st?'<span class="st" title="Model: değerli">★</span> ':''}${di?'<span class="di" title="Piyasa içi fark">◆</span> ':''}${o[0]}</td>${e.big?`<td class="num">${o[2]==null?'<span class="na">–</span>':pct(o[2])}</td>`:''}<td class="num">${o[3]==null?'<span class="na">–</span>':pct(o[3])}</td><td class="num">${odd(o[1])}</td>${diff}</tr>`; }
+  function marketTable(e,keys){ const ms=e.m.filter(m=>keys.includes(m[0])).sort((a,b)=>keys.indexOf(a[0])-keys.indexOf(b[0])||String(a[1]).localeCompare(String(b[1]),'tr',{numeric:true}));
+    if(!ms.length) return '<div class="empty">iddaa bu pazarları açmamış.</div>';
+    const cols=e.big?5:4;
+    return `<div class="tbl"><table><thead><tr><th>Seçenek</th>${e.big?'<th>Model</th>':''}<th>Adil</th><th>Oran</th><th>Fark</th></tr></thead><tbody>${ms.map(([k,s,os])=>
+      `<tr><td colspan="${cols}" class="mt">${mTitle(k,s)} ${e.big&&TRUST_A.has(k)?'<span class="trust">· model kanıtlı</span>':e.big&&EXP.has(k)?'<span class="trust">· deneysel</span>':''}</td></tr>`+os.map(o=>cells(e,k,o)).join('')).join('')}</tbody></table></div>`; }
+  function card(e){ const m=e.mean;
+    const groups=GROUPS.map(([name,keys])=>{ const ms=e.m.filter(x=>keys.includes(x[0])); if(!ms.length) return ''; const n=ms.reduce((s,x)=>s+x[2].length,0);
+      const ns=ms.reduce((s,[k,sv,os])=>s+os.filter(o=>isStar(e,k,o)).length,0), nd=ms.reduce((s,[k,sv,os])=>s+os.filter(o=>isDia(e,k,o)).length,0);
+      return `<details class="g" data-e="${e.i}" data-g="${name}"><summary><span>${name}</span><span class="tag">${n}${ns?` · <span class="st">★${ns}</span>`:''}${nd?` · <span class="di">◆${nd}</span>`:''}</span></summary></details>`; }).join('');
+    const nOther=e.m.filter(x=>!grouped.has(x[0])).reduce((s,x)=>s+x[2].length,0); const nOut=e.m.reduce((s,x)=>s+x[2].length,0);
+    return `<article class="card" data-i="${e.i}"><div class="ch"><div><div class="t">${e.h} – ${e.a}</div>
+        ${e.ns?`<span class="pill s">★ ${e.ns}</span>`:''}${e.nd?`<span class="pill d">◆ ${e.nd}</span>`:''}${e.few?'<span class="pill few">az veri</span>':''}${!e.mx?'<span class="pill nm" title="Maç sonucu veya 2,5 alt/üst oranı yok">adil fiyat yok</span>':''}</div>
+        <div class="meta"><span class="num">${fT.format(new Date(e.d*1000))}</span><br>${nOut} seçenek</div></div>
+      ${e.xg?`<div class="kv"><span>${e.big?'xG':'Piyasa gol beklentisi'} <b>${(+e.xg[0]).toFixed(2)} – ${(+e.xg[1]).toFixed(2)}</b></span>${m&&m.sh?`<span>Şut <b>${m.sh[0]} – ${m.sh[1]}</b></span><span>İsabetli <b>${m.sot[0]} – ${m.sot[1]}</b></span><span>Korner <b>${m.co[0]} – ${m.co[1]}</b></span>`:''}</div>`:''}
+      ${(()=>{ const b=banko(e,minO); return b?`<div class="banko"><span class="tag">Banko</span> <b>${shortLabel(e,b.k,b.s,b.o[0])}</b> <span class="num">${pct(b.p)} · ${b.o[1].toFixed(2)}</span></div>`:''; })()}
+      ${e.full?'':`<button type="button" class="loadAll" data-i="${e.i}">Tüm pazarları getir</button>`}
+      ${groups}${nOther?`<details class="g" data-e="${e.i}" data-g="Diğer"><summary><span>Oyuncu ve özel bahisler</span><span class="tag">${nOther} · hesap yok</span></summary></details>`:''}
+    </article>`; }
+  function render(){
+    [...scC.children].forEach(b=>b.setAttribute('aria-pressed',!lig&&b.dataset.k===scope));
+    document.getElementById('minOtxt').textContent=minO.toFixed(2).replace('.',',');
+    [...dC.children].forEach(b=>b.setAttribute('aria-pressed',days.has(b.dataset.k)));
+    // günün tercihleri (banko per match, sorted by probability)
+    const B=D.events.filter(e=>vis(e)&&e.d>now).map(e=>banko(e,minO)).filter(Boolean).sort((a,b)=>b.p-a.p);
+    document.getElementById('tops').innerHTML=B.length?B.slice(0,tLimit).map(x=>pick(x)).join(''):'<tr><td colspan="6" class="empty">Bu filtrede tercih yok.</td></tr>';
+    document.getElementById('moreT').hidden=B.length<=tLimit;
+    // pazar arama
+    const [pl,pk,ps,pn]=PRESETS[preset]; const SR=[];
+    for(const e of D.events){ if(!vis(e)||e.d<now) continue; for(const [k,s,os] of e.m){ if(k!==pk||(ps!=null&&String(s)!==ps)) continue; for(const o of os){ if(o[0]!==pn||o[1]<minO) continue; const p=Pr(e,k,o); if(p!=null) SR.push({e,k,s,o,p}); } } }
+    SR.sort((a,b)=>b.p-a.p);
+    document.getElementById('srch').innerHTML=SR.length?SR.slice(0,sLimit).map(x=>pick(x)).join(''):`<tr><td colspan="6" class="empty">"${pl}" için bu filtrede ${minO.toFixed(2)} ve üzeri oranlı seçenek yok.</td></tr>`;
+    document.getElementById('moreS').hidden=SR.length<=sLimit;
+    document.getElementById('srchN').textContent=SR.length+' maç';
+    const S=STARS.filter(p=>vis(p.e)), Dd=DIAS.filter(p=>vis(p.e));
+    document.getElementById('sS').textContent=S.length; document.getElementById('sD').textContent=Dd.length;
+    document.getElementById('stars').innerHTML=S.length?listRows(S,'star',999):'<tr><td colspan="6" class="empty">Bu filtrede ★ yok. ★ sadece büyük 7 ligde çıkar.</td></tr>';
+    document.getElementById('dias').innerHTML=Dd.length?listRows(Dd,'dia',dLimit):'<tr><td colspan="6" class="empty">Bu filtrede ◆ yok.</td></tr>';
+    document.getElementById('moreD').hidden=Dd.length<=dLimit;
+    const evs=D.events.filter(vis); const byC=new Map(); for(const e of evs){ if(!byC.has(e.ci)) byC.set(e.ci,[]); byC.get(e.ci).push(e); }
+    const order=[...byC.entries()].sort((a,b)=>(b[1][0].big-a[1][0].big)||((b[1].reduce((s,e)=>s+e.ns+e.nd,0))-(a[1].reduce((s,e)=>s+e.ns+e.nd,0)))||b[1].length-a[1].length);
+    document.getElementById('groups').innerHTML= order.length? order.map(([ci,es],i)=>{ es.sort((a,b)=>a.d-b.d); const ns=es.reduce((s,e)=>s+e.ns,0), nd=es.reduce((s,e)=>s+e.nd,0);
+      return `<details class="lg" data-c="${ci}"${i<3&&order.length<40?' open':''}><summary><span class="n">${es[0].cn}</span><span class="tag">${es.length} maç${ns?` · <span class="st">★${ns}</span>`:''}${nd?` · <span class="di">◆${nd}</span>`:''}</span></summary>${(i<3&&order.length<40)?es.map(card).join(''):''}</details>`; }).join('') : '<div class="empty">Bu filtreye uyan maç yok.</div>';
+    window.__curByC=byC;
+  }
+  const G=document.getElementById('groups');
+  G.addEventListener('toggle',ev=>{ const d=ev.target; if(!d.open) return;
+    if(d.classList.contains('lg')&&!d.querySelector('.card')){ const es=window.__curByC.get(+d.dataset.c)||[]; d.insertAdjacentHTML('beforeend',es.map(card).join('')); return; }
+    if(d.classList.contains('g')&&!d.dataset.done){ const e=D.events.find(x=>x.i==d.dataset.e); const g=d.dataset.g;
+      const keys= g==='Diğer'? [...new Set(e.m.filter(x=>!grouped.has(x[0])).map(x=>x[0]))] : GROUPS.find(x=>x[0]===g)[1];
+      d.insertAdjacentHTML('beforeend',marketTable(e,keys)); d.dataset.done=1; } },true);
+  G.addEventListener('click',async ev=>{ const b=ev.target.closest('.loadAll'); if(!b) return; const e=D.events.find(x=>x.i==b.dataset.i); if(!e) return;
+    b.disabled=true; b.textContent='Yükleniyor…';
+    try{ const ne=await window.fetchFull(e); Object.assign(e,ne,{full:1}); recompute(); const art=b.closest('article'); art.outerHTML=card(e); }
+    catch(err){ b.disabled=false; b.textContent='Alınamadı, tekrar dene'; } });
+  render();
+}
+</script>
+<script src="builder.js"></script>
+<script>
+(function(){
+  const IDD='https://sportsbookv2.iddaa.com/sportsbook';
+  const T=document.getElementById('liveT'), L=document.getElementById('live'), BAR=document.querySelector('#liveBar i'), RL=document.getElementById('reload');
+  RL.onclick=()=>location.reload();
+  const say=(t,cls)=>{ T.textContent=t; L.className='live'+(cls?' '+cls:''); };
+  const get=async u=>{ const r=await fetch(u,{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); const j=await r.json(); if(!j||j.isSuccess===false) throw new Error('iddaa yanıtı boş'); return j.data; };
+  let M=null, CN={};
+  window.fetchFull=async e=>{ const d=await get(IDD+'/event/'+e.i); d.ci=d.ci??e.ci; d.d=d.d??e.d; return BLD.buildEvent(d,M,CN[d.ci]); };
+  async function pool(items,n,fn,onDone){ let i=0,done=0; const out=new Array(items.length);
+    await Promise.all(Array.from({length:Math.min(n,items.length)},async()=>{ while(i<items.length){ const k=i++; try{ out[k]=await fn(items[k]); }catch(err){ out[k]=null; } done++; onDone&&onDone(done); } })); return out; }
+  async function boot(){
+    try{
+      const [model,list,comps]=await Promise.all([ fetch('model.json').then(r=>r.json()), get(IDD+'/events?st=1&type=0&version=0'), get(IDD+'/competitions').catch(()=>null) ]);
+      M=model; CN=Object.assign({},M.comps); if(Array.isArray(comps)) for(const c of comps) if(c&&c.i!=null&&c.n) CN[c.i]=c.n;
+      const now=Date.now()/1000; const evs=(list.events||[]).filter(e=>e.sid===1&&e.d>now-120&&e.m&&e.m.length);
+      const big=evs.filter(e=>M.BIG[e.ci]);
+      say(`${evs.length} maç alındı · büyük liglerin ayrıntıları yükleniyor (0/${big.length})`);
+      const det=await pool(big,6,e=>get(IDD+'/event/'+e.i),d=>{ BAR.style.width=Math.round(100*d/Math.max(1,big.length))+'%'; say(`${evs.length} maç alındı · büyük liglerin ayrıntıları yükleniyor (${d}/${big.length})`); });
+      const full=new Map(); big.forEach((e,k)=>{ if(det[k]){ det[k].ci=det[k].ci??e.ci; det[k].d=det[k].d??e.d; full.set(e.i,det[k]); } });
+      const events=evs.map(e=>{ const raw=full.get(e.i)||e; const b=BLD.buildEvent(raw,M,CN[e.ci]); if(full.has(e.i)) b.full=1; return b; });
+      document.getElementById('wrap').classList.remove('boot');
+      startApp({built:new Date().toISOString(),names:M.names,events});
+      const t=new Intl.DateTimeFormat('tr-TR',{timeZone:'Europe/Istanbul',hour:'2-digit',minute:'2-digit'}).format(new Date());
+      say(`Canlı oranlar · ${t} itibarıyla · takım güçleri ${new Intl.DateTimeFormat('tr-TR',{day:'numeric',month:'long'}).format(new Date(M.built))} verisiyle`,'ok');
+      document.getElementById('liveBar').hidden=true; RL.hidden=false;
+    }catch(err){
+      say('iddaa bültenine ulaşılamadı ('+err.message+'). İnternet bağlantını kontrol et. Türkiye dışından erişim engelli olabilir.','err'); RL.hidden=false; RL.textContent='Tekrar dene'; document.getElementById('liveBar').hidden=true;
+    }
+  }
+  boot();
+  if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>
