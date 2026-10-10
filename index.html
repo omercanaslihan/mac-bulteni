@@ -99,6 +99,8 @@ section.method p{margin:0;font-size:13.5px;color:var(--muted)}
 .live.ok .dot{background:var(--good)} .live.err .dot{background:var(--bad)} .live.err{color:var(--bad)}
 .live button,.loadAll{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:4px 12px;cursor:pointer}
 .loadAll{margin:0 14px 10px}
+.tag.gone{color:var(--bad)}
+tr:has(.gone) td{opacity:.75}
 .bar{height:4px;background:var(--soft);border-radius:2px;overflow:hidden;flex:1 1 120px;max-width:220px}
 .bar i{display:block;height:100%;background:var(--model);width:0;transition:width .2s}
 .boot .controls,.boot .panel,.boot .groups,.boot section.method,.boot .stats{display:none}
@@ -185,6 +187,8 @@ function startApp(BULTEN){
   const pct=p=>'%'+(p<0.1?(p*100).toFixed(1).replace('.',','):Math.round(p*100));
   const odd=o=>o>1.01?o.toFixed(2):'–';
   const now=Date.now()/1000;
+  const fTs=new Intl.DateTimeFormat('tr-TR',{timeZone:TZ,hour:'2-digit',minute:'2-digit'});
+  const when=e=>fT.format(new Date(e.d*1000))+(e.d<now?`<br><span class="tag gone">${e.d<now-7200?'oynandı':'başladı'}</span>`:'');
   function mTitle(k,s){ let n=N[k]||k; if(k==='2_100'||k==='2_863'||k==='2_864'){ const v=+s; n=n.replace('{h}','· ev '+(v>0?'+':'')+String(v).replace('.',',')); }
     return n.replace('{0}',s!=null?String(s).replace('.',','):'').replace('{1}','').replace(/\s+/g,' ').trim(); }
   const eM=o=>o[2]==null||o[1]<=1.01?null:o[2]*o[1]-1;   // model edge
@@ -260,7 +264,7 @@ function startApp(BULTEN){
   ligS.onchange=()=>{ lig=ligS.value; render(); };
   const vis=e=>(lig?e.cn===lig:(scope==='all'||e.big))&&(!days.size||days.has(e.day))&&(!q||(e.h+' '+e.a+' '+e.cn).toLocaleLowerCase('tr').includes(q))&&(!onlyMark||e.ns||e.nd);
   function selLabel(e,k,s,o){ if(k==='2_912') return 'Şut · '+o[0]; if(k==='2_913') return 'İsabetli şut · '+o[0]; if(k==='2_822') return e.h+' korner '+String(s).replace('.',',')+' '+o[0]; if(k==='2_823') return e.a+' korner '+String(s).replace('.',',')+' '+o[0]; return mTitle(k,s)+' · '+o[0]; }
-  function listRows(arr,kind,limit){ return arr.slice(0,limit).map(({e,k,s,o,ed})=>`<tr class="${kind}"><td class="num">${fT.format(new Date(e.d*1000))}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><span class="${kind==='star'?'st':'di'}">${kind==='star'?'★':'◆'}</span> ${selLabel(e,k,s,o)}</td><td class="num">${pct(kind==='star'?o[2]:o[3])}</td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${kind==='star'?'p':'d'}">+${Math.round(ed*100)}%</td></tr>`).join(''); }
+  function listRows(arr,kind,limit){ return arr.slice(0,limit).map(({e,k,s,o,ed})=>`<tr class="${kind}"><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><span class="${kind==='star'?'st':'di'}">${kind==='star'?'★':'◆'}</span> ${selLabel(e,k,s,o)}</td><td class="num">${pct(kind==='star'?o[2]:o[3])}</td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${kind==='star'?'p':'d'}">+${Math.round(ed*100)}%</td></tr>`).join(''); }
   let dLimit=40, tLimit=30, sLimit=30, minO=1.30, preset=7;
   document.getElementById('moreD').onclick=()=>{dLimit+=60; render();};
   document.getElementById('moreT').onclick=()=>{tLimit+=40; render();};
@@ -268,7 +272,7 @@ function startApp(BULTEN){
   const mOI=document.getElementById('minO'); mOI.value=minO.toFixed(2); mOI.onchange=()=>{ const v=parseFloat(String(mOI.value).replace(',','.')); if(v>=1.01&&v<=10){minO=v;} mOI.value=minO.toFixed(2); render(); };
   const pS=document.getElementById('preset'); pS.innerHTML=PRESETS.map((p,i)=>`<option value="${i}">${p[0]}</option>`).join(''); pS.value=preset; pS.onchange=()=>{preset=+pS.value; sLimit=30; render();};
   const pick=(x,kind)=>{ const {e,k,s,o,p}=x; const ed=p*o[1]-1; const st=isStar(e,k,o), di=isDia(e,k,o);
-    return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${fT.format(new Date(e.d*1000))}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><b>${shortLabel(e,k,s,o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}</td><td class="num"><b>${pct(p)}</b></td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${ed>0?'d':''}">${ed>0?'+':''}${Math.round(ed*100)}%</td></tr>`; };
+    return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><b>${shortLabel(e,k,s,o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}</td><td class="num"><b>${pct(p)}</b></td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${ed>0?'d':''}">${ed>0?'+':''}${Math.round(ed*100)}%</td></tr>`; };
   function cells(e,k,o){ const st=isStar(e,k,o), di=isDia(e,k,o); const m=eM(o), f=eF(o);
     let diff='<td class="na">–</td>'; if(e.big&&m!=null&&TRUST_A.has(k)) diff=`<td class="diff ${m>0?'p':''}">${m>0?'+':''}${Math.round(m*100)}%</td>`; else if(f!=null) diff=`<td class="diff ${f>0?'d':''}">${f>0?'+':''}${Math.round(f*100)}%</td>`;
     return `<tr${st?' class="star"':di?' class="dia"':''}><td>${st?'<span class="st" title="Model: değerli">★</span> ':''}${di?'<span class="di" title="Piyasa içi fark">◆</span> ':''}${o[0]}</td>${e.big?`<td class="num">${o[2]==null?'<span class="na">–</span>':pct(o[2])}</td>`:''}<td class="num">${o[3]==null?'<span class="na">–</span>':pct(o[3])}</td><td class="num">${odd(o[1])}</td>${diff}</tr>`; }
@@ -283,11 +287,11 @@ function startApp(BULTEN){
       return `<details class="g" data-e="${e.i}" data-g="${name}"><summary><span>${name}</span><span class="tag">${n}${ns?` · <span class="st">★${ns}</span>`:''}${nd?` · <span class="di">◆${nd}</span>`:''}</span></summary></details>`; }).join('');
     const nOther=e.m.filter(x=>!grouped.has(x[0])).reduce((s,x)=>s+x[2].length,0); const nOut=e.m.reduce((s,x)=>s+x[2].length,0);
     return `<article class="card" data-i="${e.i}"><div class="ch"><div><div class="t">${e.h} – ${e.a}</div>
-        ${e.ns?`<span class="pill s">★ ${e.ns}</span>`:''}${e.nd?`<span class="pill d">◆ ${e.nd}</span>`:''}${e.few?'<span class="pill few">az veri</span>':''}${!e.mx?'<span class="pill nm" title="Maç sonucu veya 2,5 alt/üst oranı yok">adil fiyat yok</span>':''}</div>
+        ${e.ns?`<span class="pill s">★ ${e.ns}</span>`:''}${e.nd?`<span class="pill d">◆ ${e.nd}</span>`:''}${e.few?'<span class="pill few">az veri</span>':''}${e.snap?`<span class="pill nm" title="Maç başladığı için iddaa listeden çıkardı; bu oranlar cihazına kaydedilen son oranlar">${e.d<now-7200?'Oynandı':'Başladı'} · oranlar ${fTs.format(new Date(e.snap*1000))}</span>`:''}${!e.mx?'<span class="pill nm" title="Maç sonucu veya 2,5 alt/üst oranı yok">adil fiyat yok</span>':''}</div>
         <div class="meta"><span class="num">${fT.format(new Date(e.d*1000))}</span><br>${nOut} seçenek</div></div>
       ${e.xg?`<div class="kv"><span>${e.big?'xG':'Piyasa gol beklentisi'} <b>${(+e.xg[0]).toFixed(2)} – ${(+e.xg[1]).toFixed(2)}</b></span>${m&&m.sh?`<span>Şut <b>${m.sh[0]} – ${m.sh[1]}</b></span><span>İsabetli <b>${m.sot[0]} – ${m.sot[1]}</b></span><span>Korner <b>${m.co[0]} – ${m.co[1]}</b></span>`:''}</div>`:''}
       ${(()=>{ const b=banko(e,minO); return b?`<div class="banko"><span class="tag">Banko</span> <b>${shortLabel(e,b.k,b.s,b.o[0])}</b> <span class="num">${pct(b.p)} · ${b.o[1].toFixed(2)}</span></div>`:''; })()}
-      ${e.full?'':`<button type="button" class="loadAll" data-i="${e.i}">Tüm pazarları getir</button>`}
+      ${e.full||e.snap?'':`<button type="button" class="loadAll" data-i="${e.i}">Tüm pazarları getir</button>`}
       ${groups}${nOther?`<details class="g" data-e="${e.i}" data-g="Diğer"><summary><span>Oyuncu ve özel bahisler</span><span class="tag">${nOther} · hesap yok</span></summary></details>`:''}
     </article>`; }
   function render(){
@@ -295,12 +299,12 @@ function startApp(BULTEN){
     document.getElementById('minOtxt').textContent=minO.toFixed(2).replace('.',',');
     [...dC.children].forEach(b=>b.setAttribute('aria-pressed',days.has(b.dataset.k)));
     // günün tercihleri (banko per match, sorted by probability)
-    const B=D.events.filter(e=>vis(e)&&e.d>now).map(e=>banko(e,minO)).filter(Boolean).sort((a,b)=>b.p-a.p);
+    const B=D.events.filter(e=>vis(e)).map(e=>banko(e,minO)).filter(Boolean).sort((a,b)=>b.p-a.p);
     document.getElementById('tops').innerHTML=B.length?B.slice(0,tLimit).map(x=>pick(x)).join(''):'<tr><td colspan="6" class="empty">Bu filtrede tercih yok.</td></tr>';
     document.getElementById('moreT').hidden=B.length<=tLimit;
     // pazar arama
     const [pl,pk,ps,pn]=PRESETS[preset]; const SR=[];
-    for(const e of D.events){ if(!vis(e)||e.d<now) continue; for(const [k,s,os] of e.m){ if(k!==pk||(ps!=null&&String(s)!==ps)) continue; for(const o of os){ if(o[0]!==pn||o[1]<minO) continue; const p=Pr(e,k,o); if(p!=null) SR.push({e,k,s,o,p}); } } }
+    for(const e of D.events){ if(!vis(e)) continue; for(const [k,s,os] of e.m){ if(k!==pk||(ps!=null&&String(s)!==ps)) continue; for(const o of os){ if(o[0]!==pn||o[1]<minO) continue; const p=Pr(e,k,o); if(p!=null) SR.push({e,k,s,o,p}); } } }
     SR.sort((a,b)=>b.p-a.p);
     document.getElementById('srch').innerHTML=SR.length?SR.slice(0,sLimit).map(x=>pick(x)).join(''):`<tr><td colspan="6" class="empty">"${pl}" için bu filtrede ${minO.toFixed(2)} ve üzeri oranlı seçenek yok.</td></tr>`;
     document.getElementById('moreS').hidden=SR.length<=sLimit;
@@ -338,6 +342,13 @@ function startApp(BULTEN){
   const say=(t,cls)=>{ T.textContent=t; L.className='live'+(cls?' '+cls:''); };
   const get=async u=>{ const r=await fetch(u,{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); const j=await r.json(); if(!j||j.isSuccess===false) throw new Error('iddaa yanıtı boş'); return j.data; };
   let M=null, CN={};
+  // Cihaz içi kayıt: maç başlayınca iddaa listeden çıkarıyor, başlama öncesi son oranları burada saklıyoruz
+  const idb=()=>new Promise((res,rej)=>{ const q=indexedDB.open('mb-snap',1); q.onupgradeneeded=()=>q.result.createObjectStore('ev',{keyPath:'i'}); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); });
+  async function snapSave(raws){ try{ const db=await idb(); const tx=db.transaction('ev','readwrite'); const st=tx.objectStore('ev'); const t=Math.round(Date.now()/1000);
+      for(const r of raws) st.put({i:r.i,ci:r.ci,d:r.d,hn:r.hn,an:r.an,at:t,m:(r.m||[]).map(m=>({t:m.t,st:m.st,sov:m.sov,o:(m.o||[]).map(o=>({n:o.n,odd:o.odd}))}))});
+      await new Promise(r=>{tx.oncomplete=r;tx.onerror=r;}); }catch(e){} }
+  async function snapLoad(){ try{ const db=await idb(); const all=await new Promise((res,rej)=>{ const q=db.transaction('ev').objectStore('ev').getAll(); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); });
+      const old=Date.now()/1000-3*86400; const tx=db.transaction('ev','readwrite'); for(const r of all) if(r.d<old) tx.objectStore('ev').delete(r.i); return all.filter(r=>r.d>=old); }catch(e){ return []; } }
   window.fetchFull=async e=>{ const d=await get(IDD+'/event/'+e.i); d.ci=d.ci??e.ci; d.d=d.d??e.d; return BLD.buildEvent(d,M,CN[d.ci]); };
   async function pool(items,n,fn,onDone){ let i=0,done=0; const out=new Array(items.length);
     await Promise.all(Array.from({length:Math.min(n,items.length)},async()=>{ while(i<items.length){ const k=i++; try{ out[k]=await fn(items[k]); }catch(err){ out[k]=null; } done++; onDone&&onDone(done); } })); return out; }
@@ -350,11 +361,18 @@ function startApp(BULTEN){
       say(`${evs.length} maç alındı · büyük liglerin ayrıntıları yükleniyor (0/${big.length})`);
       const det=await pool(big,6,e=>get(IDD+'/event/'+e.i),d=>{ BAR.style.width=Math.round(100*d/Math.max(1,big.length))+'%'; say(`${evs.length} maç alındı · büyük liglerin ayrıntıları yükleniyor (${d}/${big.length})`); });
       const full=new Map(); big.forEach((e,k)=>{ if(det[k]){ det[k].ci=det[k].ci??e.ci; det[k].d=det[k].d??e.d; full.set(e.i,det[k]); } });
-      const events=evs.map(e=>{ const raw=full.get(e.i)||e; const b=BLD.buildEvent(raw,M,CN[e.ci]); if(full.has(e.i)) b.full=1; return b; });
+      const raws=evs.map(e=>full.get(e.i)||e);
+      await snapSave(raws.filter(r=>r.d>now));
+      const events=evs.map((e,k)=>{ const b=BLD.buildEvent(raws[k],M,CN[e.ci]); if(full.has(e.i)) b.full=1; return b; });
+      // Bugün başlamış ve listeden düşmüş maçlar (bu cihazda daha önce kaydedildiyse)
+      const live=new Set(evs.map(e=>e.i)); const dayK=t=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Istanbul'}).format(new Date(t*1000)); const today=dayK(now), yest=dayK(now-86400);
+      let nSnap=0; for(const r of await snapLoad()){ if(live.has(r.i)||r.d>now) continue; const dk=dayK(r.d); if(dk!==today&&!(dk===yest&&r.d>now-6*3600)) continue;
+        const b=BLD.buildEvent(r,M,CN[r.ci]); b.snap=r.at; events.push(b); nSnap++; }
+      events.sort((a,b)=>a.d-b.d);
       document.getElementById('wrap').classList.remove('boot');
       startApp({built:new Date().toISOString(),names:M.names,events});
       const t=new Intl.DateTimeFormat('tr-TR',{timeZone:'Europe/Istanbul',hour:'2-digit',minute:'2-digit'}).format(new Date());
-      say(`Canlı oranlar · ${t} itibarıyla · takım güçleri ${new Intl.DateTimeFormat('tr-TR',{day:'numeric',month:'long'}).format(new Date(M.built))} verisiyle`,'ok');
+      say(`Canlı oranlar · ${t} itibarıyla${nSnap?` · başlamış ${nSnap} maç bu cihazdaki kayıttan`:''} · takım güçleri ${new Intl.DateTimeFormat('tr-TR',{day:'numeric',month:'long'}).format(new Date(M.built))} verisiyle`,'ok');
       document.getElementById('liveBar').hidden=true; RL.hidden=false;
     }catch(err){
       say('iddaa bültenine ulaşılamadı ('+err.message+'). İnternet bağlantını kontrol et. Türkiye dışından erişim engelli olabilir.','err'); RL.hidden=false; RL.textContent='Tekrar dene'; document.getElementById('liveBar').hidden=true;

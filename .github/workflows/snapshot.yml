@@ -1,7 +1,8 @@
 name: Bülten kaydı
 on:
-  schedule:
-    - cron: '*/20 * * * *'
+  # GitHub hesabındaki ödeme sorunu çözülünce aşağıdaki iki satırın başındaki # işaretini kaldır
+  # schedule:
+  #   - cron: '*/20 * * * *'
   workflow_dispatch:
 permissions:
   contents: write
