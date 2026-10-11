@@ -545,12 +545,12 @@ function startApp(BULTEN){
     if(!days.length){ try{ const r=await fetch(AF+'/status',{headers:{'x-apisports-key':key}}); const j=await r.json(); const er=j&&j.errors&&(Array.isArray(j.errors)?j.errors.length:Object.keys(j.errors).length)?Object.values(j.errors).join(' '):null;
         if(er||!j||!j.response||Array.isArray(j.response)) afMsg.textContent='Anahtar doğrulanamadı: '+(er||'API yanıt vermedi')+'. Anahtarı kontrol edip tekrar kaydet.';
         else { const R=j.response, q=R.requests||{}, pl=(R.subscription||{}).plan||'?'; afMsg.textContent=`Anahtar geçerli (plan: ${pl}, bugün ${q.current??0}/${q.limit_day??'?'} istek kullanıldı). Bu cihazda henüz başlamış maç yok; ilk maç başlayınca skorlar kendiliğinden gelecek.`; } }
-      catch(e){ afMsg.textContent='Anahtar kontrol edilemedi: '+e.message; } return; }
+      catch(e){ afMsg.textContent='API-Football\'a ulaşılamadı. Reklam engelleyici, şirket ağı ya da tarayıcının izleme koruması engelliyor olabilir. Kontrol için yeni sekmede v3.football.api-sports.io/status adresini aç.'; } return; }
     try{ let fx=[],left=null; for(const d of days){ const r=await afDay(d,key,force); fx=fx.concat(r.fx); if(r.left!=null) left=r.left; }
       const n=attach(D.events,fx); window.__app.render(); settleAll(key,D);
       afMsg.textContent=`${fx.length} maçın skoru alındı, ${n} tanesi bültenle eşleşti.${left!=null?` Bugün kalan istek: ${left}.`:''}`;
       if(!fx.length) afMsg.textContent='API bu gün için maç döndürmedi. Ücretsiz plan güncel sezonu kapsamıyor olabilir.';
-    }catch(err){ afMsg.textContent='Skorlar alınamadı: '+err.message; afBox.hidden=false; } }
+    }catch(err){ afMsg.textContent=/fetch|network/i.test(err.message)?'API-Football\'a ulaşılamadı. Reklam engelleyici, şirket ağı ya da tarayıcının izleme koruması engelliyor olabilir.':'Skorlar alınamadı: '+err.message; afBox.hidden=false; } }
   window.__runScores=runScores;
   const pfBtn=document.getElementById('pfBtn'), perf=document.getElementById('perf');
   pfBtn.onclick=async()=>{ perf.hidden=!perf.hidden; if(!perf.hidden){ await TRK.render(document.getElementById('perfBody')); perf.scrollIntoView({behavior:'smooth',block:'start'}); } };
