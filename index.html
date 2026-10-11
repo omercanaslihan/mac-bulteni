@@ -455,6 +455,9 @@ function startApp(BULTEN){
       if(e.cs) out.push({...base(e),id:e.i+'|cs',t:'cs',cs:e.cs,lab:e.cs.map(c=>fsc(c[0])).join(', '),p:+e.cs.reduce((t,c)=>t+c[1],0).toFixed(4),fp:null,odd:null});
       if(e.big){ const ms=e.m.find(m=>m[0]==='1_1'); if(ms){ const by={}; for(const o of ms[2]) by[o[0]]=o; const O=['1','0','2'].map(n=>by[n]);
         if(O.every(o=>o&&o[3]!=null)){ const pm=O.map(o=>Pr(e,'1_1',o)); if(pm.every(v=>v!=null)) out.push({...base(e),id:e.i+'|ms',t:'ms',lab:'MS',pm,pf:O.map(o=>o[3]),p:null,fp:null,odd:null}); } } } }
+    for(const e of D.events){ if(!pre.has(e.i)||!e.big||e.few) continue;
+      for(const [k,s,os] of e.m){ const sut=k==='2_912'||k==='2_913', kor=k==='2_48'||k==='2_822'||k==='2_823'; if(!sut&&!kor) continue; const OP=kor?ownP(k,os):null;
+        os.forEach((o,j)=>{ if(o[2]==null||!(o[1]>1.01)) return; out.push({...base(e),id:`${e.i}|${sut?'sut':'kor'}|${k}|${s}|${o[0]}`,t:sut?'sut':'kor',k,s,n:o[0],lab:selLabel(e,k,s,o),p:o[2],fp:OP?+OP[j].toFixed(4):null,odd:o[1]}); }); } }
     for(const x of STARS) if(pre.has(x.e.i)) out.push({...base(x.e),id:`${x.e.i}|star|${x.k}|${x.s}|${x.o[0]}`,t:'star',k:x.k,s:x.s,n:x.o[0],lab:selLabel(x.e,x.k,x.s,x.o),p:x.o[2],fp:null,odd:x.o[1]});
     for(const x of DIAS) if(pre.has(x.e.i)) out.push({...base(x.e),id:`${x.e.i}|dia|${x.k}|${x.s}|${x.o[0]}`,t:'dia',k:x.k,s:x.s,n:x.o[0],lab:selLabel(x.e,x.k,x.s,x.o),p:x.o[3],fp:null,odd:x.o[1]});
     return {out,pre}; }
@@ -516,7 +519,7 @@ function startApp(BULTEN){
   document.getElementById('afSave').onclick=()=>{ const k=afKey.value.trim(); if(!k){ afMsg.textContent='Anahtarı yapıştır.'; return; } ls.set('mb_afkey',k); afMsg.textContent='Kaydedildi, skorlar alınıyor…'; runScores(true); };
   document.getElementById('afDel').onclick=()=>{ ls.del('mb_afkey'); afKey.value=''; afMsg.textContent='Anahtar bu cihazdan silindi.'; };
   const dayOf=t=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Istanbul'}).format(new Date(t*1000));
-  async function afDay(day,key,force){ const ck='mb_af_'+day; let c=null; try{ c=JSON.parse(ls.get(ck)||'null'); }catch(e){}
+  async function afDay(day,key,force){ const ck='mb_af2_'+day; let c=null; try{ c=JSON.parse(ls.get(ck)||'null'); }catch(e){}
     const today=dayOf(Date.now()/1000); const fresh=c&&((day!==today&&c.done)||(Date.now()-c.t<8*60e3));
     if(c&&fresh&&!force) return {fx:c.fx,cached:true};
     const r=await fetch(AF+'/fixtures?date='+day+'&timezone=Europe/Istanbul',{headers:{'x-apisports-key':key}});
@@ -524,13 +527,13 @@ function startApp(BULTEN){
     const errs=j.errors&&(Array.isArray(j.errors)?j.errors.length:Object.keys(j.errors).length)?j.errors:null;
     if(errs) throw new Error(Object.values(errs).join(' '));
     const fx=(j.response||[]).map(f=>{ const st=f.fixture.status.short, fin=['FT','AET','PEN'].includes(st); const ft=f.score&&f.score.fulltime||{}, ht=f.score&&f.score.halftime||{};
-      return [f.fixture.timestamp,f.teams.home.name,f.teams.away.name,st,f.fixture.status.elapsed,f.goals.home,f.goals.away,fin?(ft.home??f.goals.home):null,fin?(ft.away??f.goals.away):null,ht.home,ht.away]; });
+      return [f.fixture.timestamp,f.teams.home.name,f.teams.away.name,st,f.fixture.status.elapsed,f.goals.home,f.goals.away,fin?(ft.home??f.goals.home):null,fin?(ft.away??f.goals.away):null,ht.home,ht.away,f.fixture.id,f.teams.home.id,f.teams.away.id]; });
     const done=fx.length>0&&fx.every(f=>!['NS','1H','HT','2H','ET','BT','P','LIVE','INT','SUSP','TBD'].includes(f[3]));
     ls.set(ck,JSON.stringify({t:Date.now(),done,fx})); return {fx,cached:false,left:r.headers.get('x-ratelimit-requests-remaining')}; }
   function attach(events,fx){ const byT=new Map(); for(const f of fx){ const b=Math.round(f[0]/600); for(const k of [b-3,b-2,b-1,b,b+1,b+2,b+3]){ if(!byT.has(k)) byT.set(k,[]); byT.get(k).push(f); } }
     let n=0; for(const e of events){ if(e.d>Date.now()/1000+600) continue; const C=byT.get(Math.round(e.d/600))||[]; let best=null,bs=0;
       for(const f of C){ if(Math.abs(f[0]-e.d)>1800) continue; const a=BLD.simName(e.h,f[1]), b=BLD.simName(e.a,f[2]); const sc=(a>0&&b>0)?a+b+2:(a+b>=2?a+b:0); if(sc>bs){bs=sc;best=f;} }
-      if(best){ e.res={st:best[3],el:best[4],gh:best[5],ga:best[6],fh:best[7],fa:best[8],hh:best[9],ha:best[10]}; n++; } } return n; }
+      if(best){ e.res={st:best[3],el:best[4],gh:best[5],ga:best[6],fh:best[7],fa:best[8],hh:best[9],ha:best[10],fid:best[11],hid:best[12],aid:best[13]}; n++; } } return n; }
   async function runScores(force){ const key=ls.get('mb_afkey'); afBtn.hidden=false; pfBtn.hidden=false; if(!key||!window.__app) return;
     const D=window.__app.D; const now=Date.now()/1000; const days=[...new Set(D.events.filter(e=>e.d<now+600).map(e=>dayOf(e.d)))].sort().slice(-2);
     if(!days.length){ afMsg.textContent='Henüz başlamış maç yok.'; return; }
@@ -545,6 +548,14 @@ function startApp(BULTEN){
   async function settleAll(key,D){ const res=new Map(); for(const e of D.events) if(e.res) res.set(e.i,e.res);
     try{ const P=(await TRK.pending()).filter(r=>!res.has(r.i)); const days=[...new Set(P.map(r=>dayOf(r.d)))].sort().slice(-4);
       for(const d of days){ const r=await afDay(d,key,false).catch(()=>null); if(!r) continue; const objs=[...new Map(P.filter(x=>dayOf(x.d)===d).map(x=>[x.i,{i:x.i,d:x.d,h:x.h,a:x.a}])).values()]; attach(objs,r.fx); for(const o of objs) if(o.res) res.set(o.i,o.res); } }catch(e){}
+    // Şut/korner: biten büyük lig maçları için maç istatistiği (maç başına 1 istek, en fazla 25/açılış, cihazda saklanır)
+    try{ const need=new Set((await TRK.all()).filter(r=>TRK.needStat(r)&&res.has(r.i)&&['FT','AET','PEN'].includes(res.get(r.i).st)&&res.get(r.i).fid).map(r=>r.i)); let q=0;
+      for(const i of need){ const x=res.get(i); const ck='mb_st_'+x.fid; let st=null; try{ st=JSON.parse(ls.get(ck)||'null'); }catch(e){}
+        if(!st){ if(q>=25) continue; q++; try{ const r=await fetch(AF+'/fixtures/statistics?fixture='+x.fid,{headers:{'x-apisports-key':key}}); const j=await r.json();
+            const T=j&&j.response||[]; const get=(t,name)=>{ const v=(t.statistics||[]).find(z=>z.type===name); return v&&v.value!=null?+v.value:null; };
+            const H=T.find(t=>t.team&&t.team.id===x.hid)||T[0], A=T.find(t=>t.team&&t.team.id===x.aid)||T[1];
+            if(H&&A){ st={sh:[get(H,'Total Shots'),get(A,'Total Shots')],sot:[get(H,'Shots on Goal'),get(A,'Shots on Goal')],co:[get(H,'Corner Kicks'),get(A,'Corner Kicks')]}; if(st.sh[0]!=null||st.co[0]!=null) ls.set(ck,JSON.stringify(st)); else st=null; } }catch(e){} }
+        if(st) x.stat=st; } }catch(e){}
     const n=await TRK.settle(res); if(!perf.hidden) TRK.render(document.getElementById('perfBody')); return n; }
   boot().then(()=>runScores(false));
   if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
