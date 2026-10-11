@@ -152,10 +152,11 @@ tr:has(.gone) td{opacity:.75}
 
   <section class="panel" id="kupon" hidden>
     <div class="panel-head"><h2>Kupon önerisi</h2><p>Kaç maç ve hangi toplam oranı istediğini gir. Her maçtan bir seçim alınır; hedef orana ulaşan kombinasyonlar içinde tutma ihtimali en yüksek olan kurulur. Gün seçimi buradan yapılır; aşağıdaki Büyük 7 lig / Tüm ligler ve lig filtreleri de geçerli; başlamış maçlar ve iddaa'nın MBS kuralına uymayan seçimler alınmaz.</p></div>
-    <form class="kf" id="kForm">
+    <form class="kf" id="kForm" novalidate>
       <label for="kD">Gün <select id="kD"></select></label>
       <label for="kN">Maç sayısı <input id="kN" type="number" min="1" max="20" step="1" value="4" inputmode="numeric"></label>
-      <label for="kY">Hedef oran <input id="kY" type="number" min="1.2" max="10000" step="0.1" value="5" inputmode="decimal"></label>
+      <label for="kY">Hedef oran <input id="kY" type="number" min="1" max="10000" step="0.01" value="5" inputmode="decimal"></label>
+      <label for="kMin">Seçim başı en düşük oran <input id="kMin" type="number" min="1" max="5" step="0.01" value="1.30" inputmode="decimal"></label>
       <label for="kM">Kupon türü <select id="kM">
         <option value="all">Karışık (tüm ana pazarlar)</option>
         <option value="ms">Maç sonucu (MS)</option>
@@ -418,12 +419,12 @@ function startApp(BULTEN){
   const SHOT=new Set(['2_912','2_913']);
   // Pazarın kendi fiyatı: o pazarın oranlarından marj temizlenmiş olasılık (çifte şansta toplam 2)
   function ownP(k,os){ if(os.some(o=>!(o[1]>1.01))) return null; if(k==='2_92'){ const inv=os.map(o=>1/o[1]), S=inv.reduce((a,b)=>a+b,0); return inv.map(x=>2*x/S); } return os.length>=2?BLD.devig(os.map(o=>o[1])):null; }
-  function kCands(e,M,N){ const out=[]; for(const [k,s,os,mbc] of e.m){ if(!M.k.has(k)) continue; if(mbc!=null&&mbc>N) continue;
+  function kCands(e,M,N,MIN){ const out=[]; for(const [k,s,os,mbc] of e.m){ if(!M.k.has(k)) continue; if(mbc!=null&&mbc>N) continue;
       const shot=SHOT.has(k); if(shot&&(!e.big||e.few)) continue; const OP=shot?null:ownP(k,os); if(!shot&&!OP) continue;
-      os.forEach((o,j)=>{ if(o[1]<1.12||o[1]>8||(M.n&&!M.n(o[0]))) return; const pr=Pr(e,k,o), po=OP?OP[j]:null;
+      os.forEach((o,j)=>{ if(o[1]<MIN||o[1]>8||(M.n&&!M.n(o[0]))) return; const pr=Pr(e,k,o), po=OP?OP[j]:null;
         const p=shot?pr:(pr!=null?Math.min(pr,po):po); if(!(p>0.03&&p<0.995)) return; out.push({e,k,s,o,p,po,pr,lp:Math.log(p),lo:Math.log(o[1])}); }); } return out; }
-  function buildCoupon(N,Y,mode,exclude){ const t0=Date.now()/1000+300;
-    const kDay=document.getElementById('kD').value; const C=D.events.filter(e=>visK(e)&&(!kDay||e.day===kDay)&&e.d>t0&&!e.snap&&(e.mx||mode==='sut'||mode==='kor')&&!exclude.has(e.i)).map(e=>kCands(e,KM[mode],N)).filter(c=>c.length);
+  function buildCoupon(N,Y,mode,exclude,MIN){ const t0=Date.now()/1000+300;
+    const kDay=document.getElementById('kD').value; const C=D.events.filter(e=>visK(e)&&(!kDay||e.day===kDay)&&e.d>t0&&!e.snap&&(e.mx||mode==='sut'||mode==='kor')&&!exclude.has(e.i)).map(e=>kCands(e,KM[mode],N,MIN)).filter(c=>c.length);
     if(C.length<N) return {err:`Bu filtrelerde uygun ${C.length} maç var, ${N} gerekiyor. Tüm ligler'i seç, gün filtresini kaldır ya da maç sayısını azalt.`};
     const LY=Math.log(Y), tot=a=>a.reduce((t,x)=>t+x.lo,0);
     const at=lam=>{ const b=C.map(c=>{ let m=null; for(const x of c){ const v=x.lp+lam*x.lo; if(!m||v>m.v) m={...x,v,c}; } return m; }); b.sort((a,z)=>z.v-a.v); return b.slice(0,N); };
@@ -437,8 +438,9 @@ function startApp(BULTEN){
     const P=sel.reduce((t,x)=>t*x.p,1), O=sel.reduce((t,x)=>t*x.o[1],1), F=sel.every(x=>x.po!=null)?sel.reduce((t,x)=>t*x.po,1):null;
     sel.sort((a,b)=>a.e.d-b.e.d); return {sel,P,O,F,ev:P*O-1}; }
   const kOut=document.getElementById('kOut'), kAlt=document.getElementById('kAlt'); let kEx=new Set(), kLast=null;
-  function showCoupon(fresh){ const N=Math.max(1,Math.min(20,Math.round(+document.getElementById('kN').value||4))); const Y=Math.max(1.2,parseFloat(String(document.getElementById('kY').value).replace(',','.'))||5); const mode=document.getElementById('kM').value;
-    if(fresh) kEx=new Set(); const r=buildCoupon(N,Y,mode,kEx);
+  function showCoupon(fresh){ const N=Math.max(1,Math.min(20,Math.round(+document.getElementById('kN').value||4))); const Y=Math.max(1.2,parseFloat(String(document.getElementById('kY').value).replace(',','.'))||5); const mode=document.getElementById('kM').value; const MIN=Math.max(1.01,Math.min(5,parseFloat(String(document.getElementById('kMin').value).replace(',','.'))||1.30));
+    if(fresh) kEx=new Set(); if(Math.pow(MIN,N)>Y*1.0001){ kOut.innerHTML=`<p class="empty">${N} seçim × en az ${MIN.toFixed(2).replace('.',',')} oran = en az ${Math.pow(MIN,N).toFixed(2).replace('.',',')} eder; hedef oran bundan küçük olamaz. Hedefi yükselt, maç sayısını ya da en düşük oranı azalt.</p>`; kAlt.hidden=true; return; }
+    const r=buildCoupon(N,Y,mode,kEx,MIN);
     if(r.err){ kOut.innerHTML=`<p class="empty">${r.err}</p>`; kAlt.hidden=true; return; }
     r.sel.forEach(x=>kEx.add(x.e.i)); kAlt.hidden=false; kLast=r;
     kOut.innerHTML=`<div class="ktot"><div><b>${r.O.toFixed(2).replace('.',',')}</b>toplam oran</div><div><b>%${(r.P*100).toFixed(1).replace('.',',')}</b>tutma ihtimali</div>${r.F!=null?`<div><b>%${(r.F*100).toFixed(1).replace('.',',')}</b>iddaa'nın kendi fiyatına göre</div>`:''}<div><b class="${r.ev>=0?'ok':'no'}">${r.ev>=0?'+':''}${Math.round(r.ev*100)}%</b>beklenen değer</div></div>
