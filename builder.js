@@ -140,8 +140,18 @@
         }
         row[n] = p == null || !isFinite(p) ? null : +p.toFixed(4); } }
     const r1 = v => v ? [+v[0].toFixed(1), +v[1].toFixed(1)] : null;
-    return { P, xg: [+gr.lam.toFixed(2), +gr.mu.toFixed(2)], mean: { sh: r1(mean.sh), sot: r1(mean.sot), co: r1(mean.co), fo: r1(mean.fo), off: r1(mean.off), yc: r1(mean.yc) } };
+    return { P, states, xg: [+gr.lam.toFixed(2), +gr.mu.toFixed(2)], mean: { sh: r1(mean.sh), sot: r1(mean.sot), co: r1(mean.co), fo: r1(mean.fo), off: r1(mean.off), yc: r1(mean.yc) } };
   }
+
+  // Maç sonu skor dağılımı: 'h:a' → olasılık
+  function scoreDist(states) { const D = {}; for (const [i, j, k, l, p] of states) { const key = (i + k) + ':' + (j + l); D[key] = (D[key] || 0) + p; } return D; }
+  // En olası 3 skor: piyasadan çıkarılan gol beklentisi (+ büyük liglerde %25 model, + iddaa skor pazarı varsa %50)
+  function topScores(mkt, mod, mk) { const D = {}; const add = (src, w) => { for (const [k, p] of Object.entries(src)) D[k] = (D[k] || 0) + w * p; };
+    let wM = 1; if (mod) { add(mod, 0.25); wM = 0.75; }
+    const cs = mk.find(m => m[0] === '2_86' && m[2].length >= 10 && m[2].every(o => o[1] > 1.01));
+    if (cs && mkt) { const pr = devig(cs[2].map(o => o[1])); const S = {}; cs[2].forEach((o, x) => { if (/^\d+:\d+$/.test(o[0])) S[o[0]] = pr[x]; }); add(mkt, wM * 0.5); add(S, wM * 0.5); }
+    else if (mkt) add(mkt, wM); else if (mod) add(mod, 0.75);
+    return Object.entries(D).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, p]) => [k, +p.toFixed(3)]); }
 
   // raw: iddaa event {i, ci, d, hn, an, m:[{t, st, sov, o:[{n, odd}]}]}
   function buildEvent(raw, M, cn) {
@@ -158,6 +168,7 @@
     if (lgk && M.X[lgk]) { const T = M.TEAMS[lgk]; const h = matchTeam(T, raw.hn), a = matchTeam(T, raw.an);
       if (h && a && h[0] !== a[0]) { MP = modelProbs(M, lgk, h[0], a[0], raw.hn, raw.an, mk); if (MP) { e.xg = MP.xg; e.mean = MP.mean; const C = M.cnt[lgk] || {}; e.few = ((C[h[0]] || 0) < 10 || (C[a[0]] || 0) < 10) ? 1 : 0; e.hid = h[0]; e.aid = a[0]; } }
       if (!MP) e.big = 0; }
+    if (states || MP) e.cs = topScores(states ? scoreDist(states) : null, MP ? scoreDist(MP.states) : null, mk);
     for (const [key, s, os] of mk) { const row = [key, s, []]; const mrow = MP ? MP.P[key + '|' + s] : null;
       for (const [n, odd] of os) { const fp = states && odd > 1.01 && GOALKEYS.has(key) ? goalProb(key, n, s, states, 1) : null;
         row[2].push([n, odd, mrow ? (mrow[n] ?? null) : null, fp == null ? null : +fp.toFixed(4)]); }

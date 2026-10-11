@@ -107,6 +107,7 @@ section.method p{margin:0;font-size:13.5px;color:var(--muted)}
 .afbox input{font:inherit;font-size:14px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);min-width:0;flex:1 1 220px;max-width:340px}
 .afbox button{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:4px 12px;cursor:pointer}
 .sum{margin:0 16px 10px;font-size:13.5px}
+.csl{font-size:12px;color:var(--muted)} .csl b{color:var(--ink);font-family:var(--f-mono);font-weight:500} .csl b.ok{color:var(--good)}
 .afbox[hidden]{display:none}
 #afMsg{font-size:12.5px;color:var(--muted)}
 tr:has(.gone) td{opacity:.75}
@@ -172,6 +173,7 @@ tr:has(.gone) td{opacity:.75}
     <h2>Nasıl okunur</h2>
     <div><h4>★ Model</h4><p>Büyük 7 ligde (3.961 maç) takım bazlı şut, isabetli şut ve korner modeli. Geçmişte kalibre: "%40" dediğinde %40. Bu pazarlarda model iddaa'dan bağımsız bir görüş veriyor.</p></div>
     <div><h4>◆ Piyasa</h4><p>iddaa'nın MS ve 2,5 alt/üst oranlarından marj temizlenip maçın gol beklentisi çıkarılıyor. Diğer bütün gol pazarları bu beklentiyle yeniden fiyatlanıyor. Fark pozitifse iddaa o seçeneği kendi ana pazarına göre cömert fiyatlamış demektir.</p></div>
+    <div><h4>Skor tahmini</h4><p>Her maçta en olası 3 maç sonu skoru. Piyasanın gol beklentisinden hesaplanır; büyük liglerde modelin payı %25. iddaa'nın skor pazarı açıksa onun yarı ağırlığı var. En olası skor bile genelde %10–14 civarındadır; üç skorun toplamı ortalama %32, yani yaklaşık üç maçta bir tutar.</p></div>
     <div><h4>Sütunlar</h4><p>"Model": istatistik modeli (sadece büyük 7 lig). "Adil": iddaa'nın ana oranlarından türetilen olasılık. "Fark" = olasılık × oran − 1. Oyuncu ve özel bahislerde hesap yok, sadece oran var.</p></div>
     <div><h4>Uyarılar</h4><p>Hiçbir işaret henüz ileriye dönük sonuçla doğrulanmadı; ilk ölçüm bu hafta sonundan. Sakatlık, kadro ve motivasyon hesapta yok. Oranlar sayfadaki saatte alındı ve değişmiş olabilir.</p></div>
   </section>
@@ -206,6 +208,10 @@ function startApp(BULTEN){
   function settle(e,k,s,n){ const r=e.res; if(!r||!FIN.has(r.st)||r.fh==null||!BLD.GOALKEYS.has(k)) return null;
     let st=null; if(r.hh!=null&&r.ha!=null) st=[r.hh,r.ha,r.fh-r.hh,r.fa-r.ha]; else if(FTONLY.has(k)) st=[0,0,r.fh,r.fa]; if(!st) return null;
     const v=BLD.goalPred(k,n,s,st,1); return v===undefined?null:v; }
+  const fsc=k=>k.replace(':','–');
+  const csHit=e=>{ const r=e.res; if(!e.cs||!r||!FIN.has(r.st)||r.fh==null) return null; return e.cs.some(c=>c[0]===r.fh+':'+r.fa); };
+  const csLine=(e,short)=>{ if(!e.cs) return ''; const r=e.res, act=r&&FIN.has(r.st)&&r.fh!=null?r.fh+':'+r.fa:null;
+    return e.cs.map(([k,p])=>`<b${act===k?' class="ok"':''}>${fsc(k)}</b>${short?'':' <span class="num">'+pct(p)+'</span>'}`).join(short?' · ':' &nbsp;·&nbsp; ')+mark(csHit(e)); };
   const mark=v=>v===true?' <span class="ok" title="Tuttu">✓</span>':v===false?' <span class="no" title="Yattı">✗</span>':'';
   function scoreTag(e){ const r=e.res; if(!r) return e.d<now?`<span class="tag gone">${e.d<now-7200?'oynandı':'başladı'}</span>`:'';
     if(FIN.has(r.st)) return `<span class="tag sc">${r.fh}–${r.fa}${r.hh!=null?` (İY ${r.hh}–${r.ha})`:''}${r.st!=='FT'?' · uzatma':''}</span>`;
@@ -295,7 +301,7 @@ function startApp(BULTEN){
   const mOI=document.getElementById('minO'); mOI.value=minO.toFixed(2); mOI.onchange=()=>{ const v=parseFloat(String(mOI.value).replace(',','.')); if(v>=1.01&&v<=10){minO=v;} mOI.value=minO.toFixed(2); render(); };
   const pS=document.getElementById('preset'); pS.innerHTML=PRESETS.map((p,i)=>`<option value="${i}">${p[0]}</option>`).join(''); pS.value=preset; pS.onchange=()=>{preset=+pS.value; sLimit=30; render();};
   const pick=(x,kind)=>{ const {e,k,s,o,p}=x; const ed=p*o[1]-1; const st=isStar(e,k,o), di=isDia(e,k,o);
-    return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><b>${shortLabel(e,k,s,o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}${mark(settle(e,k,s,o[0]))}</td><td class="num"><b>${pct(p)}</b></td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${ed>0?'d':''}">${ed>0?'+':''}${Math.round(ed*100)}%</td></tr>`; };
+    return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span>${e.cs?`<br><span class="csl">Skor: ${csLine(e,true)}</span>`:''}</td><td><b>${shortLabel(e,k,s,o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}${mark(settle(e,k,s,o[0]))}</td><td class="num"><b>${pct(p)}</b></td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${ed>0?'d':''}">${ed>0?'+':''}${Math.round(ed*100)}%</td></tr>`; };
   function cells(e,k,o){ const st=isStar(e,k,o), di=isDia(e,k,o); const m=eM(o), f=eF(o);
     let diff='<td class="na">–</td>'; if(e.big&&m!=null&&TRUST_A.has(k)) diff=`<td class="diff ${m>0?'p':''}">${m>0?'+':''}${Math.round(m*100)}%</td>`; else if(f!=null) diff=`<td class="diff ${f>0?'d':''}">${f>0?'+':''}${Math.round(f*100)}%</td>`;
     return `<tr${st?' class="star"':di?' class="dia"':''}><td>${st?'<span class="st" title="Model: değerli">★</span> ':''}${di?'<span class="di" title="Piyasa içi fark">◆</span> ':''}${o[0]}</td>${e.big?`<td class="num">${o[2]==null?'<span class="na">–</span>':pct(o[2])}</td>`:''}<td class="num">${o[3]==null?'<span class="na">–</span>':pct(o[3])}</td><td class="num">${odd(o[1])}</td>${diff}</tr>`; }
@@ -314,6 +320,7 @@ function startApp(BULTEN){
         <div class="meta"><span class="num">${fT.format(new Date(e.d*1000))}</span><br>${scoreTag(e)||nOut+' seçenek'}</div></div>
       ${e.xg?`<div class="kv"><span>${e.big?'xG':'Piyasa gol beklentisi'} <b>${(+e.xg[0]).toFixed(2)} – ${(+e.xg[1]).toFixed(2)}</b></span>${m&&m.sh?`<span>Şut <b>${m.sh[0]} – ${m.sh[1]}</b></span><span>İsabetli <b>${m.sot[0]} – ${m.sot[1]}</b></span><span>Korner <b>${m.co[0]} – ${m.co[1]}</b></span>`:''}</div>`:''}
       ${(()=>{ const b=banko(e,minO); return b?`<div class="banko"><span class="tag">Banko</span> <b>${shortLabel(e,b.k,b.s,b.o[0])}</b> <span class="num">${pct(b.p)} · ${b.o[1].toFixed(2)}</span>${mark(settle(e,b.k,b.s,b.o[0]))}</div>`:''; })()}
+      ${e.cs?`<div class="banko"><span class="tag" title="En olası 3 skor (maç sonu). Üçünün toplam olasılığı yaklaşık %${Math.round(100*e.cs.reduce((t,c)=>t+c[1],0))}">Skor</span> ${csLine(e)}</div>`:''}
       ${e.full||e.snap?'':`<button type="button" class="loadAll" data-i="${e.i}">Tüm pazarları getir</button>`}
       ${groups}${nOther?`<details class="g" data-e="${e.i}" data-g="Diğer"><summary><span>Oyuncu ve özel bahisler</span><span class="tag">${nOther} · hesap yok</span></summary></details>`:''}
     </article>`; }
@@ -327,7 +334,8 @@ function startApp(BULTEN){
     document.getElementById('moreT').hidden=B.length<=tLimit;
     { const S=B.map(x=>({x,v:settle(x.e,x.k,x.s,x.o[0])})).filter(y=>y.v!=null); const el=document.getElementById('topsSum');
       if(S.length){ const w=S.filter(y=>y.v).length; const u=S.reduce((t,y)=>t+(y.v?y.x.o[1]-1:-1),0);
-        el.innerHTML=`Biten maçlarda bankolar: <b>${w}/${S.length}</b> tuttu (%${Math.round(100*w/S.length)}). Bu tercihler beklenen ortalama %${Math.round(100*S.reduce((t,y)=>t+y.x.p,0)/S.length)} idi. Her birine 1 birim, iddaa oranıyla: <b class="${u>=0?'ok':'no'}">${u>=0?'+':''}${u.toFixed(2).replace('.',',')} birim</b>.`; el.hidden=false; }
+        const SC=B.map(x=>csHit(x.e)).filter(v=>v!=null); const csT=SC.length?` Skor tahmini (3 skordan biri): <b>${SC.filter(Boolean).length}/${SC.length}</b>.`:'';
+        el.innerHTML=`Biten maçlarda bankolar: <b>${w}/${S.length}</b> tuttu (%${Math.round(100*w/S.length)}). Bu tercihler beklenen ortalama %${Math.round(100*S.reduce((t,y)=>t+y.x.p,0)/S.length)} idi. Her birine 1 birim, iddaa oranıyla: <b class="${u>=0?'ok':'no'}">${u>=0?'+':''}${u.toFixed(2).replace('.',',')} birim</b>.${csT}`; el.hidden=false; }
       else el.hidden=true; }
     // pazar arama
     const [pl,pk,ps,pn]=PRESETS[preset]; const SR=[];
