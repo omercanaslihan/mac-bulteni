@@ -155,7 +155,19 @@ tr:has(.gone) td{opacity:.75}
     <form class="kf" id="kForm">
       <label for="kN">Maç sayısı <input id="kN" type="number" min="1" max="20" step="1" value="4" inputmode="numeric"></label>
       <label for="kY">Hedef oran <input id="kY" type="number" min="1.2" max="10000" step="0.1" value="5" inputmode="decimal"></label>
-      <label for="kM">Pazar <select id="kM"><option value="all">Tüm ana pazarlar</option><option value="ms">MS, çifte şans, handikap</option><option value="goal">Gol: alt/üst, KG</option></select></label>
+      <label for="kM">Kupon türü <select id="kM">
+        <option value="all">Karışık (tüm ana pazarlar)</option>
+        <option value="ms">Maç sonucu (MS)</option>
+        <option value="dc">Çifte şans</option>
+        <option value="ust">Gol üst (2,5 / 1,5 / 3,5…)</option>
+        <option value="alt">Gol alt</option>
+        <option value="au">Alt/Üst karışık</option>
+        <option value="kg">Karşılıklı gol (KG)</option>
+        <option value="kgu">KG + Alt/Üst (KG&amp;Üst)</option>
+        <option value="iy">İlk yarı</option>
+        <option value="kor">Korner</option>
+        <option value="sut">Şut (büyük 7 lig)</option>
+      </select></label>
       <button type="submit">Kupon kur</button><button type="button" id="kAlt" hidden>Başka maçlarla</button>
     </form>
     <div id="kOut" class="kout"></div>
@@ -399,13 +411,17 @@ function startApp(BULTEN){
     catch(err){ b.disabled=false; b.textContent='Alınamadı, tekrar dene'; } });
   render();
   // ---- Kupon önerisi ----
-  const KM={ all:CORE, ms:new Set(['1_1','2_92','2_100']), goal:new Set(['2_101','2_89','2_700','2_603','2_604','2_60']) };
+  const KM={ all:{k:CORE}, ms:{k:new Set(['1_1'])}, dc:{k:new Set(['2_92'])}, ust:{k:new Set(['2_101']),n:n=>n==='Üst'}, alt:{k:new Set(['2_101']),n:n=>n==='Alt'},
+    au:{k:new Set(['2_101'])}, kg:{k:new Set(['2_89'])}, kgu:{k:new Set(['2_700'])}, iy:{k:new Set(['2_88','2_77','2_60'])}, kor:{k:new Set(['2_48','2_822','2_823','2_49'])}, sut:{k:new Set(['2_912','2_913'])} };
+  const SHOT=new Set(['2_912','2_913']);
   // Pazarın kendi fiyatı: o pazarın oranlarından marj temizlenmiş olasılık (çifte şansta toplam 2)
   function ownP(k,os){ if(os.some(o=>!(o[1]>1.01))) return null; if(k==='2_92'){ const inv=os.map(o=>1/o[1]), S=inv.reduce((a,b)=>a+b,0); return inv.map(x=>2*x/S); } return os.length>=2?BLD.devig(os.map(o=>o[1])):null; }
-  function kCands(e,mset,N){ const out=[]; for(const [k,s,os,mbc] of e.m){ if(!mset.has(k)) continue; if(mbc!=null&&mbc>N) continue; const OP=ownP(k,os); if(!OP) continue;
-      os.forEach((o,j)=>{ if(o[1]<1.12||o[1]>8) return; const pr=Pr(e,k,o), po=OP[j]; const p=pr!=null?Math.min(pr,po):po; if(!(p>0.03&&p<0.995)) return; out.push({e,k,s,o,p,po,pr,lp:Math.log(p),lo:Math.log(o[1])}); }); } return out; }
+  function kCands(e,M,N){ const out=[]; for(const [k,s,os,mbc] of e.m){ if(!M.k.has(k)) continue; if(mbc!=null&&mbc>N) continue;
+      const shot=SHOT.has(k); if(shot&&(!e.big||e.few)) continue; const OP=shot?null:ownP(k,os); if(!shot&&!OP) continue;
+      os.forEach((o,j)=>{ if(o[1]<1.12||o[1]>8||(M.n&&!M.n(o[0]))) return; const pr=Pr(e,k,o), po=OP?OP[j]:null;
+        const p=shot?pr:(pr!=null?Math.min(pr,po):po); if(!(p>0.03&&p<0.995)) return; out.push({e,k,s,o,p,po,pr,lp:Math.log(p),lo:Math.log(o[1])}); }); } return out; }
   function buildCoupon(N,Y,mode,exclude){ const t0=Date.now()/1000+300;
-    const C=D.events.filter(e=>vis(e)&&e.d>t0&&!e.snap&&e.mx&&!exclude.has(e.i)).map(e=>kCands(e,KM[mode],N)).filter(c=>c.length);
+    const C=D.events.filter(e=>vis(e)&&e.d>t0&&!e.snap&&(e.mx||mode==='sut'||mode==='kor')&&!exclude.has(e.i)).map(e=>kCands(e,KM[mode],N)).filter(c=>c.length);
     if(C.length<N) return {err:`Bu filtrelerde uygun ${C.length} maç var, ${N} gerekiyor. Tüm ligler'i seç, gün filtresini kaldır ya da maç sayısını azalt.`};
     const LY=Math.log(Y), tot=a=>a.reduce((t,x)=>t+x.lo,0);
     const at=lam=>{ const b=C.map(c=>{ let m=null; for(const x of c){ const v=x.lp+lam*x.lo; if(!m||v>m.v) m={...x,v,c}; } return m; }); b.sort((a,z)=>z.v-a.v); return b.slice(0,N); };
@@ -416,17 +432,17 @@ function startApp(BULTEN){
     for(let it=0;it<30;it++){ let best=null; const T=tot(sel);
       sel.forEach((x,j)=>{ for(const y of x.c){ if(y===x||y.lp<=x.lp) continue; const nt=T-x.lo+y.lo; if(nt<LY-1e-9) continue; const g=y.lp-x.lp; if(!best||g>best.g) best={j,y,g}; } });
       if(!best) break; sel[best.j]={...best.y,c:sel[best.j].c}; }
-    const P=sel.reduce((t,x)=>t*x.p,1), O=sel.reduce((t,x)=>t*x.o[1],1), F=sel.reduce((t,x)=>t*x.po,1);
+    const P=sel.reduce((t,x)=>t*x.p,1), O=sel.reduce((t,x)=>t*x.o[1],1), F=sel.every(x=>x.po!=null)?sel.reduce((t,x)=>t*x.po,1):null;
     sel.sort((a,b)=>a.e.d-b.e.d); return {sel,P,O,F,ev:P*O-1}; }
   const kOut=document.getElementById('kOut'), kAlt=document.getElementById('kAlt'); let kEx=new Set(), kLast=null;
   function showCoupon(fresh){ const N=Math.max(1,Math.min(20,Math.round(+document.getElementById('kN').value||4))); const Y=Math.max(1.2,parseFloat(String(document.getElementById('kY').value).replace(',','.'))||5); const mode=document.getElementById('kM').value;
     if(fresh) kEx=new Set(); const r=buildCoupon(N,Y,mode,kEx);
     if(r.err){ kOut.innerHTML=`<p class="empty">${r.err}</p>`; kAlt.hidden=true; return; }
     r.sel.forEach(x=>kEx.add(x.e.i)); kAlt.hidden=false; kLast=r;
-    kOut.innerHTML=`<div class="ktot"><div><b>${r.O.toFixed(2).replace('.',',')}</b>toplam oran</div><div><b>%${(r.P*100).toFixed(1).replace('.',',')}</b>tutma ihtimali</div><div><b>%${(r.F*100).toFixed(1).replace('.',',')}</b>iddaa'nın kendi fiyatına göre</div><div><b class="${r.ev>=0?'ok':'no'}">${r.ev>=0?'+':''}${Math.round(r.ev*100)}%</b>beklenen değer</div></div>
+    kOut.innerHTML=`<div class="ktot"><div><b>${r.O.toFixed(2).replace('.',',')}</b>toplam oran</div><div><b>%${(r.P*100).toFixed(1).replace('.',',')}</b>tutma ihtimali</div>${r.F!=null?`<div><b>%${(r.F*100).toFixed(1).replace('.',',')}</b>iddaa'nın kendi fiyatına göre</div>`:''}<div><b class="${r.ev>=0?'ok':'no'}">${r.ev>=0?'+':''}${Math.round(r.ev*100)}%</b>beklenen değer</div></div>
       <div class="tbl"><table class="list"><thead><tr><th>Saat</th><th>Maç</th><th>Tercih</th><th>Olasılık</th><th>Oran</th><th>MBS</th></tr></thead><tbody>${r.sel.map(x=>{ const st=isStar(x.e,x.k,x.o), di=isDia(x.e,x.k,x.o); const mb=(x.e.m.find(m=>m[0]===x.k&&m[1]===x.s)||[])[3];
         return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${fT.format(new Date(x.e.d*1000))}</td><td>${x.e.h} – ${x.e.a}<br><span class="tag">${x.e.cn}</span></td><td><b>${shortLabel(x.e,x.k,x.s,x.o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}</td><td class="num">${pct(x.p)}</td><td class="num">${x.o[1].toFixed(2)}</td><td class="num">${mb??'–'}</td></tr>`; }).join('')}</tbody></table></div>
-      <p class="knote">Her seçimde temkinli olasılık kullanılır: bizim tahminimiz ile iddaa'nın o pazardaki kendi fiyatından hangisi düşükse o. Böylece modelin aşırı iyimser olduğu yerler kupona hayali değer katmaz. Tutma ihtimali, seçimlerin birbirinden bağımsız olduğu varsayımıyla olasılıkların çarpımıdır. Beklenen değer = ihtimal × toplam oran − 1; iddaa her seçimde pay aldığı için maç sayısı arttıkça genelde daha çok eksiye düşer. Oranlar sayfa açıldığında alındı, oynamadan önce iddaa'da kontrol et. Bu bir araştırma aracıdır, bahis tavsiyesi değildir.</p>`; }
+      ${mode==='sut'?'<p class="knote"><b>Şut kuponu:</b> olasılıklar sadece istatistik modelinden (büyük 7 lig, yeterli verisi olan takımlar). Bu pazarda iddaa iki yönlü fiyat vermediği için piyasa karşılaştırması yok; şut seçimleri henüz ileriye dönük test edilmedi.</p>':''}${mode==='kor'?'<p class="knote"><b>Korner kuponu:</b> korner modelimiz geri testte fazla iddialı çıktığı için burada sadece iddaa\'nın kendi fiyatı kullanılıyor.</p>':''}<p class="knote">Her seçimde temkinli olasılık kullanılır: bizim tahminimiz ile iddaa'nın o pazardaki kendi fiyatından hangisi düşükse o. Böylece modelin aşırı iyimser olduğu yerler kupona hayali değer katmaz. Tutma ihtimali, seçimlerin birbirinden bağımsız olduğu varsayımıyla olasılıkların çarpımıdır. Beklenen değer = ihtimal × toplam oran − 1; iddaa her seçimde pay aldığı için maç sayısı arttıkça genelde daha çok eksiye düşer. Oranlar sayfa açıldığında alındı, oynamadan önce iddaa'da kontrol et. Bu bir araştırma aracıdır, bahis tavsiyesi değildir.</p>`; }
   document.getElementById('kForm').onsubmit=ev=>{ ev.preventDefault(); showCoupon(true); };
   kAlt.onclick=()=>showCoupon(false);
   const kBtn=document.getElementById('kBtn'), kup=document.getElementById('kupon'); kBtn.hidden=false;
