@@ -107,6 +107,13 @@ section.method p{margin:0;font-size:13.5px;color:var(--muted)}
 .afbox input{font:inherit;font-size:14px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);min-width:0;flex:1 1 220px;max-width:340px}
 .afbox button{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:4px 12px;cursor:pointer}
 .sum{margin:0 16px 10px;font-size:13.5px}
+.kf{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:0 16px 12px;font-size:13.5px}
+.kf input,.kf select{font:inherit;font-size:14px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);margin-left:4px}
+.kf input{width:84px} .kf label{display:flex;align-items:center;max-width:100%;min-width:0} .kf select{min-width:0;max-width:calc(100vw - 110px)}
+.kf button,#kBtn{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:5px 14px;cursor:pointer}
+.kf button[type=submit]{background:var(--model);color:var(--surface);border-color:var(--model)}
+.kout{padding:0 0 12px} .kout .ktot{display:flex;flex-wrap:wrap;gap:6px 26px;padding:10px 16px;font-size:13px;color:var(--muted)} .kout .ktot b{display:block;font:600 20px var(--f-mono);color:var(--ink)}
+.kout .knote{margin:0 16px;font-size:12.5px;color:var(--muted);max-width:76ch}
 .pf{padding:0 16px 16px;display:flex;flex-direction:column;gap:12px}
 .pf h3{font:700 18px var(--f-display);margin:4px 0 6px}
 .pf-head{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center}
@@ -135,7 +142,7 @@ tr:has(.gone) td{opacity:.75}
     <p class="eyebrow" id="stamp"></p>
     <h1>Maç Bülteni</h1>
     <p class="lede">iddaa bültenindeki bütün futbol maçları ve bütün seçenekleri. İki ayrı işaret var: <span class="st">★ model</span> büyük 7 ligde takım şutu ve isabetli şutta istatistik modelimizin iddaa marjını aştığı oranlar. <span class="di">◆ piyasa</span> ise iddaa'nın bir seçeneği kendi MS ve 2,5 alt/üst oranlarıyla tutarsız biçimde, yani olması gerekenden yüksek fiyatladığı yerler; her ligde çalışır. Araştırma ve takip aracıdır, bahis tavsiyesi değildir.</p>
-    <div class="live" id="live" role="status"><span class="dot"></span><span id="liveT">iddaa bülteni alınıyor…</span><span class="bar" id="liveBar"><i></i></span><button type="button" id="reload" hidden>Yenile</button><button type="button" id="afBtn" hidden>Skorlar</button><button type="button" id="pfBtn" hidden>Performans</button></div>
+    <div class="live" id="live" role="status"><span class="dot"></span><span id="liveT">iddaa bülteni alınıyor…</span><span class="bar" id="liveBar"><i></i></span><button type="button" id="reload" hidden>Yenile</button><button type="button" id="afBtn" hidden>Skorlar</button><button type="button" id="pfBtn" hidden>Performans</button><button type="button" id="kBtn" hidden>Kupon yap</button></div>
     <div class="afbox" id="afBox" hidden><label for="afKey">API-Football anahtarı</label><input id="afKey" type="password" autocomplete="off" spellcheck="false" placeholder="dashboard.api-football.com → My Access"><button type="button" id="afSave">Kaydet</button><button type="button" id="afDel">Sil</button><span id="afMsg"></span></div>
     <div class="stats">
       <div><b id="sM"></b>maç</div><div><b id="sL"></b>lig</div><div><b id="sO"></b>seçenek</div>
@@ -143,6 +150,16 @@ tr:has(.gone) td{opacity:.75}
     </div>
   </header>
 
+  <section class="panel" id="kupon" hidden>
+    <div class="panel-head"><h2>Kupon önerisi</h2><p>Kaç maç ve hangi toplam oranı istediğini gir. Her maçtan bir seçim alınır; hedef orana ulaşan kombinasyonlar içinde tutma ihtimali en yüksek olan kurulur. Aşağıdaki filtreler (Büyük 7 lig / Tüm ligler, gün, lig) geçerli; başlamış maçlar ve iddaa'nın MBS kuralına uymayan seçimler alınmaz.</p></div>
+    <form class="kf" id="kForm">
+      <label for="kN">Maç sayısı <input id="kN" type="number" min="1" max="20" step="1" value="4" inputmode="numeric"></label>
+      <label for="kY">Hedef oran <input id="kY" type="number" min="1.2" max="10000" step="0.1" value="5" inputmode="decimal"></label>
+      <label for="kM">Pazar <select id="kM"><option value="all">Tüm ana pazarlar</option><option value="ms">MS, çifte şans, handikap</option><option value="goal">Gol: alt/üst, KG</option></select></label>
+      <button type="submit">Kupon kur</button><button type="button" id="kAlt" hidden>Başka maçlarla</button>
+    </form>
+    <div id="kOut" class="kout"></div>
+  </section>
   <section class="panel" id="perf" hidden>
     <div class="panel-head"><h2>Performans</h2><p>Tahminler maç başlamadan dondurulur, skor gelince puanlanır. "Beklenen" bizim verdiğimiz ortalama olasılık; tuttu oranı ona yakınsa olasılıklarımız doğru demektir. Birim: her tercihe 1 birim, kaydedilen iddaa oranıyla.</p></div>
     <div id="perfBody" class="pf"></div>
@@ -381,6 +398,40 @@ function startApp(BULTEN){
     try{ const ne=await window.fetchFull(e); Object.assign(e,ne,{full:1}); recompute(); const art=b.closest('article'); art.outerHTML=card(e); }
     catch(err){ b.disabled=false; b.textContent='Alınamadı, tekrar dene'; } });
   render();
+  // ---- Kupon önerisi ----
+  const KM={ all:CORE, ms:new Set(['1_1','2_92','2_100']), goal:new Set(['2_101','2_89','2_700','2_603','2_604','2_60']) };
+  // Pazarın kendi fiyatı: o pazarın oranlarından marj temizlenmiş olasılık (çifte şansta toplam 2)
+  function ownP(k,os){ if(os.some(o=>!(o[1]>1.01))) return null; if(k==='2_92'){ const inv=os.map(o=>1/o[1]), S=inv.reduce((a,b)=>a+b,0); return inv.map(x=>2*x/S); } return os.length>=2?BLD.devig(os.map(o=>o[1])):null; }
+  function kCands(e,mset,N){ const out=[]; for(const [k,s,os,mbc] of e.m){ if(!mset.has(k)) continue; if(mbc!=null&&mbc>N) continue; const OP=ownP(k,os); if(!OP) continue;
+      os.forEach((o,j)=>{ if(o[1]<1.12||o[1]>8) return; const pr=Pr(e,k,o), po=OP[j]; const p=pr!=null?Math.min(pr,po):po; if(!(p>0.03&&p<0.995)) return; out.push({e,k,s,o,p,po,pr,lp:Math.log(p),lo:Math.log(o[1])}); }); } return out; }
+  function buildCoupon(N,Y,mode,exclude){ const t0=Date.now()/1000+300;
+    const C=D.events.filter(e=>vis(e)&&e.d>t0&&!e.snap&&e.mx&&!exclude.has(e.i)).map(e=>kCands(e,KM[mode],N)).filter(c=>c.length);
+    if(C.length<N) return {err:`Bu filtrelerde uygun ${C.length} maç var, ${N} gerekiyor. Tüm ligler'i seç, gün filtresini kaldır ya da maç sayısını azalt.`};
+    const LY=Math.log(Y), tot=a=>a.reduce((t,x)=>t+x.lo,0);
+    const at=lam=>{ const b=C.map(c=>{ let m=null; for(const x of c){ const v=x.lp+lam*x.lo; if(!m||v>m.v) m={...x,v,c}; } return m; }); b.sort((a,z)=>z.v-a.v); return b.slice(0,N); };
+    let sel=at(0);
+    if(tot(sel)<LY){ let lo=0,hi=1; while(tot(at(hi))<LY&&hi<64) hi*=2; if(tot(at(hi))<LY) return {err:`${N} maçla ${Y.toFixed(2).replace('.',',')} orana ulaşılamıyor (seçim başına en fazla 8,00 alıyorum). Maç sayısını artır ya da hedefi düşür.`};
+      for(let it=0;it<40;it++){ const mid=(lo+hi)/2; if(tot(at(mid))>=LY) hi=mid; else lo=mid; } sel=at(hi); }
+    // İnce ayar: hedefin üstünde kalarak tutma ihtimalini artıran değişiklikleri yap
+    for(let it=0;it<30;it++){ let best=null; const T=tot(sel);
+      sel.forEach((x,j)=>{ for(const y of x.c){ if(y===x||y.lp<=x.lp) continue; const nt=T-x.lo+y.lo; if(nt<LY-1e-9) continue; const g=y.lp-x.lp; if(!best||g>best.g) best={j,y,g}; } });
+      if(!best) break; sel[best.j]={...best.y,c:sel[best.j].c}; }
+    const P=sel.reduce((t,x)=>t*x.p,1), O=sel.reduce((t,x)=>t*x.o[1],1), F=sel.reduce((t,x)=>t*x.po,1);
+    sel.sort((a,b)=>a.e.d-b.e.d); return {sel,P,O,F,ev:P*O-1}; }
+  const kOut=document.getElementById('kOut'), kAlt=document.getElementById('kAlt'); let kEx=new Set(), kLast=null;
+  function showCoupon(fresh){ const N=Math.max(1,Math.min(20,Math.round(+document.getElementById('kN').value||4))); const Y=Math.max(1.2,parseFloat(String(document.getElementById('kY').value).replace(',','.'))||5); const mode=document.getElementById('kM').value;
+    if(fresh) kEx=new Set(); const r=buildCoupon(N,Y,mode,kEx);
+    if(r.err){ kOut.innerHTML=`<p class="empty">${r.err}</p>`; kAlt.hidden=true; return; }
+    r.sel.forEach(x=>kEx.add(x.e.i)); kAlt.hidden=false; kLast=r;
+    kOut.innerHTML=`<div class="ktot"><div><b>${r.O.toFixed(2).replace('.',',')}</b>toplam oran</div><div><b>%${(r.P*100).toFixed(1).replace('.',',')}</b>tutma ihtimali</div><div><b>%${(r.F*100).toFixed(1).replace('.',',')}</b>iddaa'nın kendi fiyatına göre</div><div><b class="${r.ev>=0?'ok':'no'}">${r.ev>=0?'+':''}${Math.round(r.ev*100)}%</b>beklenen değer</div></div>
+      <div class="tbl"><table class="list"><thead><tr><th>Saat</th><th>Maç</th><th>Tercih</th><th>Olasılık</th><th>Oran</th><th>MBS</th></tr></thead><tbody>${r.sel.map(x=>{ const st=isStar(x.e,x.k,x.o), di=isDia(x.e,x.k,x.o); const mb=(x.e.m.find(m=>m[0]===x.k&&m[1]===x.s)||[])[3];
+        return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${fT.format(new Date(x.e.d*1000))}</td><td>${x.e.h} – ${x.e.a}<br><span class="tag">${x.e.cn}</span></td><td><b>${shortLabel(x.e,x.k,x.s,x.o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}</td><td class="num">${pct(x.p)}</td><td class="num">${x.o[1].toFixed(2)}</td><td class="num">${mb??'–'}</td></tr>`; }).join('')}</tbody></table></div>
+      <p class="knote">Her seçimde temkinli olasılık kullanılır: bizim tahminimiz ile iddaa'nın o pazardaki kendi fiyatından hangisi düşükse o. Böylece modelin aşırı iyimser olduğu yerler kupona hayali değer katmaz. Tutma ihtimali, seçimlerin birbirinden bağımsız olduğu varsayımıyla olasılıkların çarpımıdır. Beklenen değer = ihtimal × toplam oran − 1; iddaa her seçimde pay aldığı için maç sayısı arttıkça genelde daha çok eksiye düşer. Oranlar sayfa açıldığında alındı, oynamadan önce iddaa'da kontrol et. Bu bir araştırma aracıdır, bahis tavsiyesi değildir.</p>`; }
+  document.getElementById('kForm').onsubmit=ev=>{ ev.preventDefault(); showCoupon(true); };
+  kAlt.onclick=()=>showCoupon(false);
+  const kBtn=document.getElementById('kBtn'), kup=document.getElementById('kupon'); kBtn.hidden=false;
+  kBtn.onclick=()=>{ kup.hidden=!kup.hidden; if(!kup.hidden) kup.scrollIntoView({behavior:'smooth',block:'start'}); };
+
   // ---- Performans kaydı: başlamamış maçların tahminlerini dondur ----
   function trackRecs(){ const out=[], pre=new Set(); const base=e=>({i:e.i,day:e.day,d:e.d,cn:e.cn,big:e.big,h:e.h,a:e.a});
     for(const e of D.events){ if(e.d<=now||e.snap) continue; pre.add(e.i);

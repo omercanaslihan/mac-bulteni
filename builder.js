@@ -156,7 +156,7 @@
   // raw: iddaa event {i, ci, d, hn, an, m:[{t, st, sov, o:[{n, odd}]}]}
   function buildEvent(raw, M, cn) {
     const mk = []; for (const m of raw.m || []) { const os = (m.o || []).filter(o => o.n != null && o.odd != null).map(o => [String(o.n), +o.odd]); if (!os.length) continue;
-      const s = m.sov == null || m.sov === '' ? null : (isNaN(+m.sov) ? m.sov : +m.sov); mk.push([m.t + '_' + m.st, s, os]); }
+      const s = m.sov == null || m.sov === '' ? null : (isNaN(+m.sov) ? m.sov : +m.sov); mk.push([m.t + '_' + m.st, s, os, m.mbc ?? raw.mbc ?? null]); }
     const ci = raw.ci, lgk = M.BIG[ci] || null;
     const e = { i: raw.i, ci, cn: cn || M.comps[ci] || '?', d: raw.d, h: raw.hn, a: raw.an, big: lgk ? 1 : 0, few: 0, xg: null, mx: 0, mean: null, m: [] };
     if (lgk) e.lgk = lgk;
@@ -169,7 +169,7 @@
       if (h && a && h[0] !== a[0]) { MP = modelProbs(M, lgk, h[0], a[0], raw.hn, raw.an, mk); if (MP) { e.xg = MP.xg; e.mean = MP.mean; const C = M.cnt[lgk] || {}; e.few = ((C[h[0]] || 0) < 10 || (C[a[0]] || 0) < 10) ? 1 : 0; e.hid = h[0]; e.aid = a[0]; } }
       if (!MP) e.big = 0; }
     if (states || MP) e.cs = topScores(states ? scoreDist(states) : null, MP ? scoreDist(MP.states) : null, mk);
-    for (const [key, s, os] of mk) { const row = [key, s, []]; const mrow = MP ? MP.P[key + '|' + s] : null;
+    for (const [key, s, os, mbc] of mk) { const row = [key, s, [], mbc]; const mrow = MP ? MP.P[key + '|' + s] : null;
       for (const [n, odd] of os) { const fp = states && odd > 1.01 && GOALKEYS.has(key) ? goalProb(key, n, s, states, 1) : null;
         row[2].push([n, odd, mrow ? (mrow[n] ?? null) : null, fp == null ? null : +fp.toFixed(4)]); }
       e.m.push(row); }
