@@ -542,7 +542,10 @@ function startApp(BULTEN){
       if(best){ e.res={st:best[3],el:best[4],gh:best[5],ga:best[6],fh:best[7],fa:best[8],hh:best[9],ha:best[10],fid:best[11],hid:best[12],aid:best[13]}; n++; } } return n; }
   async function runScores(force){ const key=ls.get('mb_afkey'); afBtn.hidden=false; pfBtn.hidden=false; if(!key||!window.__app) return;
     const D=window.__app.D; const now=Date.now()/1000; const days=[...new Set(D.events.filter(e=>e.d<now+600).map(e=>dayOf(e.d)))].sort().slice(-2);
-    if(!days.length){ afMsg.textContent='Henüz başlamış maç yok.'; return; }
+    if(!days.length){ try{ const r=await fetch(AF+'/status',{headers:{'x-apisports-key':key}}); const j=await r.json(); const er=j&&j.errors&&(Array.isArray(j.errors)?j.errors.length:Object.keys(j.errors).length)?Object.values(j.errors).join(' '):null;
+        if(er||!j||!j.response||Array.isArray(j.response)) afMsg.textContent='Anahtar doğrulanamadı: '+(er||'API yanıt vermedi')+'. Anahtarı kontrol edip tekrar kaydet.';
+        else { const R=j.response, q=R.requests||{}, pl=(R.subscription||{}).plan||'?'; afMsg.textContent=`Anahtar geçerli (plan: ${pl}, bugün ${q.current??0}/${q.limit_day??'?'} istek kullanıldı). Bu cihazda henüz başlamış maç yok; ilk maç başlayınca skorlar kendiliğinden gelecek.`; } }
+      catch(e){ afMsg.textContent='Anahtar kontrol edilemedi: '+e.message; } return; }
     try{ let fx=[],left=null; for(const d of days){ const r=await afDay(d,key,force); fx=fx.concat(r.fx); if(r.left!=null) left=r.left; }
       const n=attach(D.events,fx); window.__app.render(); settleAll(key,D);
       afMsg.textContent=`${fx.length} maçın skoru alındı, ${n} tanesi bültenle eşleşti.${left!=null?` Bugün kalan istek: ${left}.`:''}`;
