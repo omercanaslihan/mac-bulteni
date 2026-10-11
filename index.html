@@ -151,8 +151,9 @@ tr:has(.gone) td{opacity:.75}
   </header>
 
   <section class="panel" id="kupon" hidden>
-    <div class="panel-head"><h2>Kupon önerisi</h2><p>Kaç maç ve hangi toplam oranı istediğini gir. Her maçtan bir seçim alınır; hedef orana ulaşan kombinasyonlar içinde tutma ihtimali en yüksek olan kurulur. Aşağıdaki filtreler (Büyük 7 lig / Tüm ligler, gün, lig) geçerli; başlamış maçlar ve iddaa'nın MBS kuralına uymayan seçimler alınmaz.</p></div>
+    <div class="panel-head"><h2>Kupon önerisi</h2><p>Kaç maç ve hangi toplam oranı istediğini gir. Her maçtan bir seçim alınır; hedef orana ulaşan kombinasyonlar içinde tutma ihtimali en yüksek olan kurulur. Gün seçimi buradan yapılır; aşağıdaki Büyük 7 lig / Tüm ligler ve lig filtreleri de geçerli; başlamış maçlar ve iddaa'nın MBS kuralına uymayan seçimler alınmaz.</p></div>
     <form class="kf" id="kForm">
+      <label for="kD">Gün <select id="kD"></select></label>
       <label for="kN">Maç sayısı <input id="kN" type="number" min="1" max="20" step="1" value="4" inputmode="numeric"></label>
       <label for="kY">Hedef oran <input id="kY" type="number" min="1.2" max="10000" step="0.1" value="5" inputmode="decimal"></label>
       <label for="kM">Kupon türü <select id="kM">
@@ -335,6 +336,7 @@ function startApp(BULTEN){
     const cnt={}; D.events.forEach(e=>cnt[e.cn]=(cnt[e.cn]||0)+1);
     ligS.innerHTML='<option value="">Tüm ligler ('+cn.length+')</option>'+cn.sort((a,b)=>(a==='?')-(b==='?')).map(c=>`<option value="${c.replace(/"/g,'&quot;')}">${c==='?'?'Lig adı yok':c} (${cnt[c]})</option>`).join(''); }
   ligS.onchange=()=>{ lig=ligS.value; render(); };
+  const visK=e=>(lig?e.cn===lig:(scope==='all'||e.big))&&(!q||(e.h+' '+e.a+' '+e.cn).toLocaleLowerCase('tr').includes(q))&&(!onlyMark||e.ns||e.nd);
   const vis=e=>(lig?e.cn===lig:(scope==='all'||e.big))&&(!days.size||days.has(e.day))&&(!q||(e.h+' '+e.a+' '+e.cn).toLocaleLowerCase('tr').includes(q))&&(!onlyMark||e.ns||e.nd);
   function selLabel(e,k,s,o){ if(k==='2_912') return 'Şut · '+o[0]; if(k==='2_913') return 'İsabetli şut · '+o[0]; if(k==='2_822') return e.h+' korner '+String(s).replace('.',',')+' '+o[0]; if(k==='2_823') return e.a+' korner '+String(s).replace('.',',')+' '+o[0]; return mTitle(k,s)+' · '+o[0]; }
   function listRows(arr,kind,limit){ return arr.slice(0,limit).map(({e,k,s,o,ed})=>`<tr class="${kind}"><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><span class="${kind==='star'?'st':'di'}">${kind==='star'?'★':'◆'}</span> ${selLabel(e,k,s,o)}${mark(settle(e,k,s,o[0]))}</td><td class="num">${pct(kind==='star'?o[2]:o[3])}</td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${kind==='star'?'p':'d'}">+${Math.round(ed*100)}%</td></tr>`).join(''); }
@@ -421,7 +423,7 @@ function startApp(BULTEN){
       os.forEach((o,j)=>{ if(o[1]<1.12||o[1]>8||(M.n&&!M.n(o[0]))) return; const pr=Pr(e,k,o), po=OP?OP[j]:null;
         const p=shot?pr:(pr!=null?Math.min(pr,po):po); if(!(p>0.03&&p<0.995)) return; out.push({e,k,s,o,p,po,pr,lp:Math.log(p),lo:Math.log(o[1])}); }); } return out; }
   function buildCoupon(N,Y,mode,exclude){ const t0=Date.now()/1000+300;
-    const C=D.events.filter(e=>vis(e)&&e.d>t0&&!e.snap&&(e.mx||mode==='sut'||mode==='kor')&&!exclude.has(e.i)).map(e=>kCands(e,KM[mode],N)).filter(c=>c.length);
+    const kDay=document.getElementById('kD').value; const C=D.events.filter(e=>visK(e)&&(!kDay||e.day===kDay)&&e.d>t0&&!e.snap&&(e.mx||mode==='sut'||mode==='kor')&&!exclude.has(e.i)).map(e=>kCands(e,KM[mode],N)).filter(c=>c.length);
     if(C.length<N) return {err:`Bu filtrelerde uygun ${C.length} maç var, ${N} gerekiyor. Tüm ligler'i seç, gün filtresini kaldır ya da maç sayısını azalt.`};
     const LY=Math.log(Y), tot=a=>a.reduce((t,x)=>t+x.lo,0);
     const at=lam=>{ const b=C.map(c=>{ let m=null; for(const x of c){ const v=x.lp+lam*x.lo; if(!m||v>m.v) m={...x,v,c}; } return m; }); b.sort((a,z)=>z.v-a.v); return b.slice(0,N); };
@@ -443,6 +445,10 @@ function startApp(BULTEN){
       <div class="tbl"><table class="list"><thead><tr><th>Saat</th><th>Maç</th><th>Tercih</th><th>Olasılık</th><th>Oran</th><th>MBS</th></tr></thead><tbody>${r.sel.map(x=>{ const st=isStar(x.e,x.k,x.o), di=isDia(x.e,x.k,x.o); const mb=(x.e.m.find(m=>m[0]===x.k&&m[1]===x.s)||[])[3];
         return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${fT.format(new Date(x.e.d*1000))}</td><td>${x.e.h} – ${x.e.a}<br><span class="tag">${x.e.cn}</span></td><td><b>${shortLabel(x.e,x.k,x.s,x.o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}</td><td class="num">${pct(x.p)}</td><td class="num">${x.o[1].toFixed(2)}</td><td class="num">${mb??'–'}</td></tr>`; }).join('')}</tbody></table></div>
       ${mode==='sut'?'<p class="knote"><b>Şut kuponu:</b> olasılıklar sadece istatistik modelinden (büyük 7 lig, yeterli verisi olan takımlar). Bu pazarda iddaa iki yönlü fiyat vermediği için piyasa karşılaştırması yok; şut seçimleri henüz ileriye dönük test edilmedi.</p>':''}${mode==='kor'?'<p class="knote"><b>Korner kuponu:</b> korner modelimiz geri testte fazla iddialı çıktığı için burada sadece iddaa\'nın kendi fiyatı kullanılıyor.</p>':''}<p class="knote">Her seçimde temkinli olasılık kullanılır: bizim tahminimiz ile iddaa'nın o pazardaki kendi fiyatından hangisi düşükse o. Böylece modelin aşırı iyimser olduğu yerler kupona hayali değer katmaz. Tutma ihtimali, seçimlerin birbirinden bağımsız olduğu varsayımıyla olasılıkların çarpımıdır. Beklenen değer = ihtimal × toplam oran − 1; iddaa her seçimde pay aldığı için maç sayısı arttıkça genelde daha çok eksiye düşer. Oranlar sayfa açıldığında alındı, oynamadan önce iddaa'da kontrol et. Bu bir araştırma aracıdır, bahis tavsiyesi değildir.</p>`; }
+  { const kD=document.getElementById('kD'); const t0=Date.now()/1000+300; const dd=[...new Set(D.events.filter(e=>e.d>t0&&!e.snap).map(e=>e.day))].sort();
+    const today=dayKey(Date.now()/1000), tom=dayKey(Date.now()/1000+86400);
+    kD.innerHTML='<option value="">Tüm günler</option>'+dd.map(d=>`<option value="${d}">${d===today?'Bugün · ':d===tom?'Yarın · ':''}${fDay.format(new Date(d+'T12:00:00Z'))} (${D.events.filter(e=>e.day===d&&e.d>t0&&!e.snap).length} maç)</option>`).join('');
+    kD.value=dd.includes(today)?today:''; }
   document.getElementById('kForm').onsubmit=ev=>{ ev.preventDefault(); showCoupon(true); };
   kAlt.onclick=()=>showCoupon(false);
   const kBtn=document.getElementById('kBtn'), kup=document.getElementById('kupon'); kBtn.hidden=false;
