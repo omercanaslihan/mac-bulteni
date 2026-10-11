@@ -107,6 +107,17 @@ section.method p{margin:0;font-size:13.5px;color:var(--muted)}
 .afbox input{font:inherit;font-size:14px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);min-width:0;flex:1 1 220px;max-width:340px}
 .afbox button{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:4px 12px;cursor:pointer}
 .sum{margin:0 16px 10px;font-size:13.5px}
+.pf{padding:0 16px 16px;display:flex;flex-direction:column;gap:12px}
+.pf h3{font:700 18px var(--f-display);margin:4px 0 6px}
+.pf-head{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center}
+.pf-head p,.pf-note{margin:0;font-size:13px;color:var(--muted);max-width:72ch}
+.pf-note b{color:var(--ink)}
+.pf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:16px}
+.pf-grid>div{min-width:0}
+.pf td.n,.pf th.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.pf svg{display:block;width:100%;height:auto} .pf svg text{fill:var(--muted);font:11px var(--f-body)}
+.pf-foot{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px}
+.pf-foot button,#pfBtn{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:4px 12px;cursor:pointer}
 .csl{font-size:12px;color:var(--muted)} .csl b{color:var(--ink);font-family:var(--f-mono);font-weight:500} .csl b.ok{color:var(--good)}
 .afbox[hidden]{display:none}
 #afMsg{font-size:12.5px;color:var(--muted)}
@@ -124,7 +135,7 @@ tr:has(.gone) td{opacity:.75}
     <p class="eyebrow" id="stamp"></p>
     <h1>Maç Bülteni</h1>
     <p class="lede">iddaa bültenindeki bütün futbol maçları ve bütün seçenekleri. İki ayrı işaret var: <span class="st">★ model</span> büyük 7 ligde takım şutu ve isabetli şutta istatistik modelimizin iddaa marjını aştığı oranlar. <span class="di">◆ piyasa</span> ise iddaa'nın bir seçeneği kendi MS ve 2,5 alt/üst oranlarıyla tutarsız biçimde, yani olması gerekenden yüksek fiyatladığı yerler; her ligde çalışır. Araştırma ve takip aracıdır, bahis tavsiyesi değildir.</p>
-    <div class="live" id="live" role="status"><span class="dot"></span><span id="liveT">iddaa bülteni alınıyor…</span><span class="bar" id="liveBar"><i></i></span><button type="button" id="reload" hidden>Yenile</button><button type="button" id="afBtn" hidden>Skorlar</button></div>
+    <div class="live" id="live" role="status"><span class="dot"></span><span id="liveT">iddaa bülteni alınıyor…</span><span class="bar" id="liveBar"><i></i></span><button type="button" id="reload" hidden>Yenile</button><button type="button" id="afBtn" hidden>Skorlar</button><button type="button" id="pfBtn" hidden>Performans</button></div>
     <div class="afbox" id="afBox" hidden><label for="afKey">API-Football anahtarı</label><input id="afKey" type="password" autocomplete="off" spellcheck="false" placeholder="dashboard.api-football.com → My Access"><button type="button" id="afSave">Kaydet</button><button type="button" id="afDel">Sil</button><span id="afMsg"></span></div>
     <div class="stats">
       <div><b id="sM"></b>maç</div><div><b id="sL"></b>lig</div><div><b id="sO"></b>seçenek</div>
@@ -132,6 +143,10 @@ tr:has(.gone) td{opacity:.75}
     </div>
   </header>
 
+  <section class="panel" id="perf" hidden>
+    <div class="panel-head"><h2>Performans</h2><p>Tahminler maç başlamadan dondurulur, skor gelince puanlanır. "Beklenen" bizim verdiğimiz ortalama olasılık; tuttu oranı ona yakınsa olasılıklarımız doğru demektir. Birim: her tercihe 1 birim, kaydedilen iddaa oranıyla.</p></div>
+    <div id="perfBody" class="pf"></div>
+  </section>
   <div class="controls">
     <div class="chips" id="scope" role="group" aria-label="Kapsam"><button type="button" data-k="big">Büyük 7 lig</button><button type="button" data-k="all">Tüm ligler</button></div>
     <div class="chips" id="days" role="group" aria-label="Gün"></div>
@@ -366,10 +381,22 @@ function startApp(BULTEN){
     try{ const ne=await window.fetchFull(e); Object.assign(e,ne,{full:1}); recompute(); const art=b.closest('article'); art.outerHTML=card(e); }
     catch(err){ b.disabled=false; b.textContent='Alınamadı, tekrar dene'; } });
   render();
+  // ---- Performans kaydı: başlamamış maçların tahminlerini dondur ----
+  function trackRecs(){ const out=[], pre=new Set(); const base=e=>({i:e.i,day:e.day,d:e.d,cn:e.cn,big:e.big,h:e.h,a:e.a});
+    for(const e of D.events){ if(e.d<=now||e.snap) continue; pre.add(e.i);
+      const b=banko(e,1.30); if(b) out.push({...base(e),id:e.i+'|banko',t:'banko',k:b.k,s:b.s,n:b.o[0],lab:shortLabel(e,b.k,b.s,b.o[0]),p:+b.p.toFixed(4),fp:b.o[3],odd:b.o[1]});
+      if(e.cs) out.push({...base(e),id:e.i+'|cs',t:'cs',cs:e.cs,lab:e.cs.map(c=>fsc(c[0])).join(', '),p:+e.cs.reduce((t,c)=>t+c[1],0).toFixed(4),fp:null,odd:null});
+      if(e.big){ const ms=e.m.find(m=>m[0]==='1_1'); if(ms){ const by={}; for(const o of ms[2]) by[o[0]]=o; const O=['1','0','2'].map(n=>by[n]);
+        if(O.every(o=>o&&o[3]!=null)){ const pm=O.map(o=>Pr(e,'1_1',o)); if(pm.every(v=>v!=null)) out.push({...base(e),id:e.i+'|ms',t:'ms',lab:'MS',pm,pf:O.map(o=>o[3]),p:null,fp:null,odd:null}); } } } }
+    for(const x of STARS) if(pre.has(x.e.i)) out.push({...base(x.e),id:`${x.e.i}|star|${x.k}|${x.s}|${x.o[0]}`,t:'star',k:x.k,s:x.s,n:x.o[0],lab:selLabel(x.e,x.k,x.s,x.o),p:x.o[2],fp:null,odd:x.o[1]});
+    for(const x of DIAS) if(pre.has(x.e.i)) out.push({...base(x.e),id:`${x.e.i}|dia|${x.k}|${x.s}|${x.o[0]}`,t:'dia',k:x.k,s:x.s,n:x.o[0],lab:selLabel(x.e,x.k,x.s,x.o),p:x.o[3],fp:null,odd:x.o[1]});
+    return {out,pre}; }
+  if(window.TRK){ const {out,pre}=trackRecs(); TRK.capture(out,pre); }
   window.__app={D,render};
 }
 </script>
 <script src="builder.js"></script>
+<script src="track.js"></script>
 <script>
 (function(){
   const IDD='https://sportsbookv2.iddaa.com/sportsbook';
@@ -437,15 +464,21 @@ function startApp(BULTEN){
     let n=0; for(const e of events){ if(e.d>Date.now()/1000+600) continue; const C=byT.get(Math.round(e.d/600))||[]; let best=null,bs=0;
       for(const f of C){ if(Math.abs(f[0]-e.d)>1800) continue; const a=BLD.simName(e.h,f[1]), b=BLD.simName(e.a,f[2]); const sc=(a>0&&b>0)?a+b+2:(a+b>=2?a+b:0); if(sc>bs){bs=sc;best=f;} }
       if(best){ e.res={st:best[3],el:best[4],gh:best[5],ga:best[6],fh:best[7],fa:best[8],hh:best[9],ha:best[10]}; n++; } } return n; }
-  async function runScores(force){ const key=ls.get('mb_afkey'); afBtn.hidden=false; if(!key||!window.__app) return;
+  async function runScores(force){ const key=ls.get('mb_afkey'); afBtn.hidden=false; pfBtn.hidden=false; if(!key||!window.__app) return;
     const D=window.__app.D; const now=Date.now()/1000; const days=[...new Set(D.events.filter(e=>e.d<now+600).map(e=>dayOf(e.d)))].sort().slice(-2);
     if(!days.length){ afMsg.textContent='Henüz başlamış maç yok.'; return; }
     try{ let fx=[],left=null; for(const d of days){ const r=await afDay(d,key,force); fx=fx.concat(r.fx); if(r.left!=null) left=r.left; }
-      const n=attach(D.events,fx); window.__app.render();
+      const n=attach(D.events,fx); window.__app.render(); settleAll(key,D);
       afMsg.textContent=`${fx.length} maçın skoru alındı, ${n} tanesi bültenle eşleşti.${left!=null?` Bugün kalan istek: ${left}.`:''}`;
       if(!fx.length) afMsg.textContent='API bu gün için maç döndürmedi. Ücretsiz plan güncel sezonu kapsamıyor olabilir.';
     }catch(err){ afMsg.textContent='Skorlar alınamadı: '+err.message; afBox.hidden=false; } }
   window.__runScores=runScores;
+  const pfBtn=document.getElementById('pfBtn'), perf=document.getElementById('perf');
+  pfBtn.onclick=async()=>{ perf.hidden=!perf.hidden; if(!perf.hidden){ await TRK.render(document.getElementById('perfBody')); perf.scrollIntoView({behavior:'smooth',block:'start'}); } };
+  async function settleAll(key,D){ const res=new Map(); for(const e of D.events) if(e.res) res.set(e.i,e.res);
+    try{ const P=(await TRK.pending()).filter(r=>!res.has(r.i)); const days=[...new Set(P.map(r=>dayOf(r.d)))].sort().slice(-4);
+      for(const d of days){ const r=await afDay(d,key,false).catch(()=>null); if(!r) continue; const objs=[...new Map(P.filter(x=>dayOf(x.d)===d).map(x=>[x.i,{i:x.i,d:x.d,h:x.h,a:x.a}])).values()]; attach(objs,r.fx); for(const o of objs) if(o.res) res.set(o.i,o.res); } }catch(e){}
+    const n=await TRK.settle(res); if(!perf.hidden) TRK.render(document.getElementById('perfBody')); return n; }
   boot().then(()=>runScores(false));
   if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();
