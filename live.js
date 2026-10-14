@@ -35,14 +35,14 @@
     }
     if (S) { const rh = statOf(S.H, 'Red Cards') || 0, ra = statOf(S.A, 'Red Cards') || 0; if (rh) { mH *= Math.pow(0.7, rh); mA *= Math.pow(1.25, rh); } if (ra) { mA *= Math.pow(0.7, ra); mH *= Math.pow(1.25, ra); } }
     const lr = lam0 * rf * mH, ur = mu0 * rf * mA, gh = x.gh || 0, ga = x.ga || 0;
-    const A = pois(lr, 12), B = pois(ur, 12); let H = 0, Dw = 0, Aw = 0, KG = 0; const over = {};
-    for (let i = 0; i <= 12; i++) for (let j = 0; j <= 12; j++) { const p = A[i] * B[j]; const fh = gh + i, fa = ga + j; if (fh > fa) H += p; else if (fh === fa) Dw += p; else Aw += p; if (fh > 0 && fa > 0) KG += p; const t = fh + fa; for (const L of [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]) if (t > L) over[L] = (over[L] || 0) + p; }
+    const A = pois(lr, 12), B = pois(ur, 12); let H = 0, Dw = 0, Aw = 0, KG = 0; const over = {}; const dist = [];
+    for (let i = 0; i <= 12; i++) for (let j = 0; j <= 12; j++) { const p = A[i] * B[j]; const fh = gh + i, fa = ga + j; if (p > 1e-5) dist.push([fh, fa, p]); if (fh > fa) H += p; else if (fh === fa) Dw += p; else Aw += p; if (fh > 0 && fa > 0) KG += p; const t = fh + fa; for (const L of [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]) if (t > L) over[L] = (over[L] || 0) + p; }
     const tot = lr + ur, pGoal = 1 - Math.exp(-tot);
     const tempo = (lam0 * mH + mu0 * mA) / (lam0 + mu0);
     // İlk yarının kalanı (sadece 1. yarıdayken)
     const el = Math.max(0, Math.min(47, x.el || 0)); const r1 = x.st === '1H' ? ht * Math.max(0, 47 - el) / 45 : 0; const l1 = lam0 * r1 * mH, u1 = mu0 * r1 * mA;
     const pOver = (mean, cur, L) => { if (cur > L) return 1; const need = Math.floor(L) + 1 - cur; let c = 0; const P = pois(mean, 20); for (let k = 0; k < need; k++) c += P[k]; return 1 - c; };
-    return { l1, u1, pOver, lr, ur, pGoal, nextH: tot ? pGoal * lr / tot : 0, nextA: tot ? pGoal * ur / tot : 0, H, D: Dw, A: Aw, KG, over, tempo, why, rf };
+    return { dist, l1, u1, pOver, lr, ur, pGoal, nextH: tot ? pGoal * lr / tot : 0, nextA: tot ? pGoal * ur / tot : 0, H, D: Dw, A: Aw, KG, over, tempo, why, rf };
   }
 
   // iddaa canlı oranları (adil olasılık)
@@ -85,6 +85,11 @@
     if (c.type === 'kg') return sc + 'KG ' + c.n.toLowerCase();
     if (c.type === 'next') return c.n === '1' ? 'Sıradaki gol: ' + x.h : c.n === '2' ? 'Sıradaki gol: ' + x.a : 'Başka gol olmaz';
     return sc + 'MS ' + (c.n === '0' ? 'X' : c.n); }
+  function holds(c, fh, fa) { if (c.scope !== 'ms') return null;
+    if (c.type === 'ou') { const v = c.side === 'ev' ? fh : c.side === 'dep' ? fa : fh + fa; return c.n === 'Üst' ? v > c.L : v < c.L; }
+    if (c.type === 'kg') { const v = fh > 0 && fa > 0; return c.n === 'Var' ? v : !v; }
+    if (c.type === 'res') { const R = fh > fa ? '1' : fh === fa ? '0' : '2'; return R === c.n; }
+    return null; }
   // Modelin kendi aday listesi (iddaa'dan bağımsız): her dakika anlamlı seçimler
   function modelCands(x, m) { const gh = x.gh || 0, ga = x.ga || 0, t = gh + ga, C = [];
     for (const d of [0.5, 1.5, 2.5]) { const L = t + d; C.push({ type: 'ou', scope: 'ms', side: 'top', L, n: 'Üst' }); if (d < 2) C.push({ type: 'ou', scope: 'ms', side: 'top', L, n: 'Alt' }); }
@@ -98,7 +103,14 @@
   function expectList(x, m) { const mk = new Map(liveMarkets(x).map(c => [keyOf(c), c])); const S = stats[x.fid] && stats[x.fid].v; const w = x.pre ? (S ? 0.5 : 0.35) : 0.25;
     const out = []; for (const c of modelCands(x, m)) { const pm = ourP(x, m, c); if (pm == null) continue; const k = mk.get(keyOf(c)); const p = k ? w * pm + (1 - w) * k.fair : pm;
       if (p < 0.55 || p > 0.93) continue; if (k && k.odd < 1.3) continue; out.push({ ...c, pm, p, odd: k ? k.odd : null, fair: k ? k.fair : null, edge: k ? p * k.odd - 1 : null, lab: label(x, c) }); }
-    out.sort((a, b) => b.p - a.p); const seen = new Set(); return out.filter(c => { const g = c.type + c.scope + c.side; if (seen.has(g)) return false; seen.add(g); return true; }).slice(0, 4); }
+    out.sort((a, b) => b.p - a.p); const seen = new Set(); const pick = []; let alive = m.dist.slice(); let other = 1;
+    for (const c of out) { const g = c.type + c.scope + c.side; if (seen.has(g)) continue; if (pick.length >= 4) break;
+      let nextAlive = alive, nextOther = other;
+      if (c.scope === 'ms' && c.type !== 'next') nextAlive = alive.filter(([a, b]) => holds(c, a, b)); else nextOther = other * c.p; // İY ve sıradaki gol: bağımsız varsayılır
+      const joint = nextAlive.reduce((t, z) => t + z[2], 0) * nextOther;
+      if (joint < 0.4) continue; // önceki seçimlerle birlikte düşük ihtimalli: tutarsız sayılır, alınmaz
+      seen.add(g); pick.push(c); alive = nextAlive; other = nextOther; }
+    pick.joint = alive.reduce((t, z) => t + z[2], 0) * other; pick.alive = alive; return pick; }
 
   function suggest(x, m) { const S = stats[x.fid] && stats[x.fid].v; const w = x.pre ? (S ? 0.5 : 0.35) : 0.25; // modelin payı: maç öncesi veri ve istatistik varsa daha yüksek
     const C = liveMarkets(x).map(c => { const pm = ourP(x, m, c); if (pm == null) return null; const p = w * pm + (1 - w) * c.fair; return { ...c, pm, p, edge: p * c.odd - 1, lab: label(x, c) }; }).filter(Boolean);
@@ -115,10 +127,13 @@
     const lines = [0.5, 1.5, 2.5, 3.5, 4.5].filter(L => L > (x.gh + x.ga) - 0.5 && L >= (x.gh + x.ga) + 0.5).slice(0, 3);
     return `<article class="lv" data-f="${x.fid}">
       <div class="lv-h"><div><span class="tag">${x.lg}</span><div class="lv-t">${x.h} <b class="num">${x.gh ?? 0}–${x.ga ?? 0}</b> ${x.a}</div></div><div class="lv-min num">${x.st === 'HT' ? 'devre' : (x.el ?? '') + "'"}</div></div>
+      ${S ? (() => { const r = (lab, nm, f) => { const a = statOf(S.v.H, nm), b = statOf(S.v.A, nm); return a == null && b == null ? '' : `<div><span>${lab}</span><b>${f ? f(a) : a ?? 0}</b><b>${f ? f(b) : b ?? 0}</b></div>`; };
+        return `<div class="lv-stat"><div class="lv-sh"><span></span><b>Ev</b><b>Dep</b></div>${r('Şut', 'Total Shots')}${r('İsabetli şut', 'Shots on Goal')}${r('Korner', 'Corner Kicks')}${r('Topa sahip olma', 'Ball Possession', v => v == null ? '–' : '%' + v)}${r('xG', 'expected_goals', v => v == null ? '–' : fx(v))}${r('Sarı kart', 'Yellow Cards')}${r('Kırmızı kart', 'Red Cards')}</div>`; })() : ''}
       <div class="lv-meta">Tempo <b class="${tl[1]}">${tl[0]}</b>${m.why ? ` · ${m.why.src === 'xG' ? 'xG' : 'şut temelli xG'} ${fx(m.why.h, 1)}–${fx(m.why.a, 1)} (beklenen ${fx(m.why.eh, 1)}–${fx(m.why.ea, 1)})` : S ? '' : ' · istatistik alınmadı'}${x.pre ? '' : ' · <span title="Bu cihaz maç öncesini görmediği için lig ortalaması kullanıldı">maç öncesi verisi yok</span>'}${S && S.red ? ' · <span class="dn">kırmızı kart</span>' : ''}</div>
-      ${(() => { const E = expectList(x, m); x._ek = new Set(E.map(keyOf)); logLive(x, E, 'canli_b'); if (!E.length) return '<div class="lv-sg none">Beklenti: şu an %55 üstü güçlü bir öngörü yok, maç dengeli.</div>';
-        return `<div class="lv-sg ex"><span class="tag">Beklenti</span>${E.map(c => `<div class="lv-s"><b>${c.lab}</b><span class="num">${c.odd ? fx(c.odd) : '–'}</span><span>${c.fair != null ? `model %${Math.round(c.pm * 100)} · iddaa %${Math.round(c.fair * 100)} · birleşik <b>%${Math.round(c.p * 100)}</b>${c.edge >= 0.04 ? ` · <b class="ok">+${Math.round(c.edge * 100)}%</b>` : ''}` : `model <b>%${Math.round(c.p * 100)}</b> · iddaa'da canlı oran yok`}</span></div>`).join('')}</div>`; })()}
-      ${(() => { if (!x.iddI) return ''; const sg = suggest(x, m); sg.good = sg.good.filter(c => !(x._ek && x._ek.has(keyOf(c)))); logLive(x, sg.good, 'canli_d'); if (!sg.n) return '<div class="lv-sg none">iddaa bu maçta şu an canlı oran vermiyor.</div>';
+      ${(() => { const E = expectList(x, m); x._ek = new Set(E.map(keyOf)); x._alive = E.alive; logLive(x, E, 'canli_b'); if (!E.length) return '<div class="lv-sg none">Beklenti: şu an %55 üstü güçlü bir öngörü yok, maç dengeli.</div>';
+        const top = m.dist.slice().sort((a, b) => b[2] - a[2]).slice(0, 3);
+        return `<div class="lv-sg ex"><span class="tag">Beklenti</span>${E.map(c => `<div class="lv-s"><b>${c.lab}</b><span class="num">${c.odd ? fx(c.odd) : '–'}</span><span>${c.fair != null ? `model %${Math.round(c.pm * 100)} · iddaa %${Math.round(c.fair * 100)} · birleşik <b>%${Math.round(c.p * 100)}</b>${c.edge >= 0.04 ? ` · <b class="ok">+${Math.round(c.edge * 100)}%</b>` : ''}` : `model <b>%${Math.round(c.p * 100)}</b> · iddaa'da canlı oran yok`}</span></div>`).join('')}<div class="lv-j">${E.length > 1 ? `Bu ${E.length} öngörünün birlikte gerçekleşme ihtimali <b>%${Math.round(E.joint * 100)}</b>. ` : ''}En olası maç sonu skorları: ${top.map(z => `<b>${z[0]}–${z[1]}</b> %${Math.round(z[2] * 100)}`).join(', ')}</div></div>`; })()}
+      ${(() => { if (!x.iddI) return ''; const sg = suggest(x, m); sg.good = sg.good.filter(c => !(x._ek && x._ek.has(keyOf(c)))).filter(c => { if (!x._alive || c.scope !== 'ms' || c.type === 'next') return true; const tot = x._alive.reduce((t, z) => t + z[2], 0); const ok = x._alive.filter(([a, b]) => holds(c, a, b)).reduce((t, z) => t + z[2], 0); return tot > 0 && ok / tot >= 0.5; }); // Beklenti ile çelişeni gösterme logLive(x, sg.good, 'canli_d'); if (!sg.n) return '<div class="lv-sg none">iddaa bu maçta şu an canlı oran vermiyor.</div>';
         if (!sg.good.length) return x._ek && x._ek.size && sg.n ? '' : `<div class="lv-sg none">Değerli oran yok: iddaa'nın canlı oranları bizim hesapla uyumlu.${S ? '' : ' İstatistik getirirsen tempo hesaba katılır.'}</div>`;
         return `<div class="lv-sg"><span class="tag">Değerli (iddaa oranı cömert)</span>${sg.good.map(c => `<div class="lv-s"><b>${c.lab}</b><span class="num">${fx(c.odd)}</span><span>model %${Math.round(c.pm * 100)} · iddaa %${Math.round(c.fair * 100)} · birleşik <b>%${Math.round(c.p * 100)}</b> · <b class="ok">+${Math.round(c.edge * 100)}%</b></span></div>`).join('')}${S ? '' : '<span class="lv-nost">Tempo hesaba katılmadı; "İstatistik getir" ile netleşir.</span>'}</div>`; })()}
       <div class="lv-grid">
