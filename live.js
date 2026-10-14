@@ -95,12 +95,12 @@
     if (x.st === '1H') { for (const d of [0.5, 1.5]) C.push({ type: 'ou', scope: 'iy', side: 'top', L: t + d, n: 'Üst' }); C.push({ type: 'ou', scope: 'iy', side: 'ev', L: gh + 0.5, n: 'Üst' }, { type: 'ou', scope: 'iy', side: 'dep', L: ga + 0.5, n: 'Üst' }); }
     return C; }
   const keyOf = c => [c.type, c.scope, c.side, c.L ?? '', c.n].join('|');
-  function expectList(x, m) { const mk = new Map(liveMarkets(x).map(c => [keyOf(c), c])); const S = stats[x.fid]; const w = x.pre ? (S ? 0.5 : 0.35) : 0.25;
+  function expectList(x, m) { const mk = new Map(liveMarkets(x).map(c => [keyOf(c), c])); const S = stats[x.fid] && stats[x.fid].v; const w = x.pre ? (S ? 0.5 : 0.35) : 0.25;
     const out = []; for (const c of modelCands(x, m)) { const pm = ourP(x, m, c); if (pm == null) continue; const k = mk.get(keyOf(c)); const p = k ? w * pm + (1 - w) * k.fair : pm;
       if (p < 0.55 || p > 0.93) continue; if (k && k.odd < 1.3) continue; out.push({ ...c, pm, p, odd: k ? k.odd : null, fair: k ? k.fair : null, edge: k ? p * k.odd - 1 : null, lab: label(x, c) }); }
     out.sort((a, b) => b.p - a.p); const seen = new Set(); return out.filter(c => { const g = c.type + c.scope + c.side; if (seen.has(g)) return false; seen.add(g); return true; }).slice(0, 4); }
 
-  function suggest(x, m) { const S = stats[x.fid]; const w = x.pre ? (S ? 0.5 : 0.35) : 0.25; // modelin payı: maç öncesi veri ve istatistik varsa daha yüksek
+  function suggest(x, m) { const S = stats[x.fid] && stats[x.fid].v; const w = x.pre ? (S ? 0.5 : 0.35) : 0.25; // modelin payı: maç öncesi veri ve istatistik varsa daha yüksek
     const C = liveMarkets(x).map(c => { const pm = ourP(x, m, c); if (pm == null) return null; const p = w * pm + (1 - w) * c.fair; return { ...c, pm, p, edge: p * c.odd - 1, lab: label(x, c) }; }).filter(Boolean);
     const minEdge = 0.04;
     const good = C.filter(c => c.odd >= 1.2 && c.odd <= 6 && c.p >= 0.4 && c.edge >= minEdge && c.p - c.fair >= 0.03).sort((a, b) => b.edge - a.edge);
@@ -109,7 +109,7 @@
   function logLive(x, list, t) { if (!root.TRK || !list.length) return; const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date(x.t * 1000)); const now = Math.round(Date.now() / 1000);
     TRK.saveLive(list.map(c => ({ id: `${t}|${x.fid}|${keyOf(c)}`, t, fid: x.fid, i: null, d: x.t, day, h: x.h, a: x.a, cn: x.lg, big: 0, c: { type: c.type, scope: c.scope, side: c.side, L: c.L, n: c.n }, gh: x.gh || 0, ga: x.ga || 0,
       lab: `${x.st === 'HT' ? 'devre' : (x.el ?? '') + "'"} ${x.gh ?? 0}-${x.ga ?? 0} · ${c.lab}`, p: +c.p.toFixed(4), fp: c.fair != null ? +c.fair.toFixed(4) : null, odd: c.odd || null, odd0: c.odd || null, at: now, at0: now, res: null }))); }
-  function card(x) { const m = model(x); const f = iddFair(x, m); const S = stats[x.fid];
+  function card(x) { const m = model(x); const f = iddFair(x, m); const S0 = stats[x.fid]; const S = S0 && S0.v ? S0 : null;
     const cmp = (ours, key, lab) => `<div class="lv-p"><span>${lab}</span><b>${pct(ours)}</b>${f[key] != null ? `<i class="${Math.abs(ours - f[key]) >= 0.08 ? 'df' : ''}" title="iddaa canlı oranından adil olasılık">iddaa ${pct(f[key])}</i>` : ''}</div>`;
     const tl = m.tempo > 1.15 ? ['yüksek', 'up'] : m.tempo < 0.87 ? ['düşük', 'dn'] : ['normal', ''];
     const lines = [0.5, 1.5, 2.5, 3.5, 4.5].filter(L => L > (x.gh + x.ga) - 0.5 && L >= (x.gh + x.ga) + 0.5).slice(0, 3);
@@ -128,7 +128,8 @@
         ${cmp(m.KG, 'kgVar', 'KG var')}
         <div class="lv-p"><span>MS 1 / X / 2</span><b>${pct(m.H)} / ${pct(m.D)} / ${pct(m.A)}</b>${f.ms1 != null ? `<i>iddaa ${pct(f.ms1)} / ${pct(f.ms0)} / ${pct(f.ms2)}</i>` : ''}</div>
       </div>
-      <div class="lv-act"><button type="button" class="lv-st" data-f="${x.fid}">${S ? 'İstatistiği yenile' : 'İstatistik getir'}</button><span class="tag">${S ? 'istatistik ' + Math.max(0, Math.round((Date.now() - S.t) / 60000)) + ' dk önce' : '1 istek'}</span></div>
+      <div class="lv-act"><button type="button" class="lv-st" data-f="${x.fid}"${S0 && S0.loading ? ' disabled' : ''}>${S0 && S0.loading ? 'Yükleniyor…' : S ? 'İstatistiği yenile' : 'İstatistik getir'}</button><span class="tag">${S ? 'istatistik ' + Math.max(0, Math.round((Date.now() - S.t) / 60000)) + ' dk önce' : '1 istek'}</span></div>
+      ${S0 && !S0.loading && S0.why ? `<p class="lv-why">${S0.why}</p>` : ''}
     </article>`; }
 
   function render() { const box = $('lvList'); if (!box) return;
@@ -154,9 +155,13 @@
     } catch (e) { $('lvMsg').textContent = e.message === 'nokey' ? 'Canlı skor ve dakika için üstteki Skorlar kutusuna API-Football anahtarını gir.' : 'Canlı maçlar alınamadı: ' + (/fetch/i.test(e.message) ? 'API-Football\'a ulaşılamadı.' : e.message); busy = false; if (btn) btn.disabled = false; return; }
     busy = false; if (btn) btn.disabled = false; render(); }
 
-  async function getStats(fid) { const x = fixtures.find(z => z.fid == fid); if (!x) return; const c = stats[fid]; if (c && Date.now() - c.t < 60e3) return render();
+  async function getStats(fid) { const x = fixtures.find(z => z.fid == fid); if (!x) return; const c = stats[fid]; if (c && c.v && Date.now() - c.t < 60e3) return render();
+    stats[fid] = Object.assign({}, c || {}, { loading: true }); render();
     try { const T = await afGet('/fixtures/statistics?fixture=' + fid); const H = T.find(t => t.team && t.team.id === x.hid) || T[0], A = T.find(t => t.team && t.team.id === x.aid) || T[1];
-      if (H && A) stats[fid] = { t: Date.now(), v: { H, A }, red: (statOf(H, 'Red Cards') || 0) + (statOf(A, 'Red Cards') || 0) > 0 }; } catch (e) { $('lvMsg').textContent = 'İstatistik alınamadı: ' + e.message; }
+      const has = t => t && (t.statistics || []).some(z => z.value != null && z.value !== 0 && z.value !== '0');
+      if (H && A && (has(H) || has(A))) stats[fid] = { t: Date.now(), v: { H, A }, red: (statOf(H, 'Red Cards') || 0) + (statOf(A, 'Red Cards') || 0) > 0 };
+      else stats[fid] = { t: Date.now(), v: null, why: 'API-Football bu maç için canlı istatistik vermiyor (bazı liglerde yok ya da maçın başında boş geliyor). Tempo hesaba katılamadı; birkaç dakika sonra tekrar dene.' }; }
+    catch (e) { const m = e.message || ''; stats[fid] = { t: Date.now(), v: null, why: /fetch|network/i.test(m) ? "API-Football'a ulaşılamadı (bağlantı ya da engelleyici)." : /limit|many|requests/i.test(m) ? 'İstek sınırına takıldı: ücretsiz planda dakikada ~10, günde 100 istek var. Biraz bekleyip tekrar dene.' : /token|key/i.test(m) ? 'API anahtarı geçersiz görünüyor; Skorlar kutusunu kontrol et.' : 'İstatistik alınamadı: ' + m }; }
     if (x.iddI) { try { const j = await (await fetch(IDD + '/event/' + x.iddI, { cache: 'no-store' })).json(); if (j && j.data) iddDet[x.iddI] = j.data; } catch (e) { } }
     render(); }
 
