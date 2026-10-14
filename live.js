@@ -80,11 +80,26 @@
     if (c.type === 'res' && c.scope === 'ms') return c.n === '1' ? m.H : c.n === '0' ? m.D : c.n === '2' ? m.A : null;
     if (c.type === 'res' && c.scope === 'iy') { const A = pois(m.l1, 10), B = pois(m.u1, 10); let H = 0, D = 0, W = 0; for (let i = 0; i <= 10; i++) for (let j = 0; j <= 10; j++) { const p = A[i] * B[j]; const a = gh + i, b = ga + j; if (a > b) H += p; else if (a === b) D += p; else W += p; } return c.n === '1' ? H : c.n === '0' ? D : c.n === '2' ? W : null; }
     return null; }
-  function label(x, c) { const L = c.L != null ? String(c.L).replace('.', ',') : ''; const sc = c.scope === 'iy' ? 'İY ' : '';
+  function label(x, c) { const L = c.L != null ? String(c.L).replace('.', ',') : ''; const sc = c.scope === 'iy' ? 'İY ' : (c.type === 'ou' && c.side === 'top' ? 'Maç sonu ' : '');
     if (c.type === 'ou') return (c.side === 'ev' ? x.h + ' ' : c.side === 'dep' ? x.a + ' ' : '') + sc + L + ' ' + c.n.toLowerCase();
     if (c.type === 'kg') return sc + 'KG ' + c.n.toLowerCase();
     if (c.type === 'next') return c.n === '1' ? 'Sıradaki gol: ' + x.h : c.n === '2' ? 'Sıradaki gol: ' + x.a : 'Başka gol olmaz';
     return sc + 'MS ' + (c.n === '0' ? 'X' : c.n); }
+  // Modelin kendi aday listesi (iddaa'dan bağımsız): her dakika anlamlı seçimler
+  function modelCands(x, m) { const gh = x.gh || 0, ga = x.ga || 0, t = gh + ga, C = [];
+    for (const d of [0.5, 1.5, 2.5]) { const L = t + d; C.push({ type: 'ou', scope: 'ms', side: 'top', L, n: 'Üst' }); if (d < 2) C.push({ type: 'ou', scope: 'ms', side: 'top', L, n: 'Alt' }); }
+    C.push({ type: 'ou', scope: 'ms', side: 'ev', L: gh + 0.5, n: 'Üst' }, { type: 'ou', scope: 'ms', side: 'dep', L: ga + 0.5, n: 'Üst' });
+    if (!(gh > 0 && ga > 0)) C.push({ type: 'kg', scope: 'ms', side: 'top', n: 'Var' }, { type: 'kg', scope: 'ms', side: 'top', n: 'Yok' });
+    C.push({ type: 'next', scope: 'ms', side: 'top', n: '1' }, { type: 'next', scope: 'ms', side: 'top', n: '2' });
+    for (const n of ['1', '0', '2']) C.push({ type: 'res', scope: 'ms', side: 'top', n });
+    if (x.st === '1H') { for (const d of [0.5, 1.5]) C.push({ type: 'ou', scope: 'iy', side: 'top', L: t + d, n: 'Üst' }); C.push({ type: 'ou', scope: 'iy', side: 'ev', L: gh + 0.5, n: 'Üst' }, { type: 'ou', scope: 'iy', side: 'dep', L: ga + 0.5, n: 'Üst' }); }
+    return C; }
+  const keyOf = c => [c.type, c.scope, c.side, c.L ?? '', c.n].join('|');
+  function expectList(x, m) { const mk = new Map(liveMarkets(x).map(c => [keyOf(c), c])); const S = stats[x.fid]; const w = x.pre ? (S ? 0.5 : 0.35) : 0.25;
+    const out = []; for (const c of modelCands(x, m)) { const pm = ourP(x, m, c); if (pm == null) continue; const k = mk.get(keyOf(c)); const p = k ? w * pm + (1 - w) * k.fair : pm;
+      if (p < 0.55 || p > 0.93) continue; if (k && k.odd < 1.3) continue; out.push({ ...c, pm, p, odd: k ? k.odd : null, fair: k ? k.fair : null, edge: k ? p * k.odd - 1 : null, lab: label(x, c) }); }
+    out.sort((a, b) => b.p - a.p); const seen = new Set(); return out.filter(c => { const g = c.type + c.scope + c.side; if (seen.has(g)) return false; seen.add(g); return true; }).slice(0, 4); }
+
   function suggest(x, m) { const S = stats[x.fid]; const w = x.pre ? (S ? 0.5 : 0.35) : 0.25; // modelin payı: maç öncesi veri ve istatistik varsa daha yüksek
     const C = liveMarkets(x).map(c => { const pm = ourP(x, m, c); if (pm == null) return null; const p = w * pm + (1 - w) * c.fair; return { ...c, pm, p, edge: p * c.odd - 1, lab: label(x, c) }; }).filter(Boolean);
     const minEdge = 0.04;
@@ -98,9 +113,11 @@
     return `<article class="lv" data-f="${x.fid}">
       <div class="lv-h"><div><span class="tag">${x.lg}</span><div class="lv-t">${x.h} <b class="num">${x.gh ?? 0}–${x.ga ?? 0}</b> ${x.a}</div></div><div class="lv-min num">${x.st === 'HT' ? 'devre' : (x.el ?? '') + "'"}</div></div>
       <div class="lv-meta">Tempo <b class="${tl[1]}">${tl[0]}</b>${m.why ? ` · ${m.why.src === 'xG' ? 'xG' : 'şut temelli xG'} ${fx(m.why.h, 1)}–${fx(m.why.a, 1)} (beklenen ${fx(m.why.eh, 1)}–${fx(m.why.ea, 1)})` : S ? '' : ' · istatistik alınmadı'}${x.pre ? '' : ' · <span title="Bu cihaz maç öncesini görmediği için lig ortalaması kullanıldı">maç öncesi verisi yok</span>'}${S && S.red ? ' · <span class="dn">kırmızı kart</span>' : ''}</div>
-      ${(() => { if (!x.iddI) return ''; const sg = suggest(x, m); if (!sg.n) return '<div class="lv-sg none">iddaa bu maçta şu an canlı oran vermiyor.</div>';
-        if (!sg.good.length) return `<div class="lv-sg none">Şu an net öneri yok: iddaa'nın canlı oranları bizim hesapla uyumlu.${S ? '' : ' İstatistik getirirsen tempo hesaba katılır.'}</div>`;
-        return `<div class="lv-sg"><span class="tag">Öneri</span>${sg.good.map(c => `<div class="lv-s"><b>${c.lab}</b><span class="num">${fx(c.odd)}</span><span>model %${Math.round(c.pm * 100)} · iddaa %${Math.round(c.fair * 100)} · birleşik <b>%${Math.round(c.p * 100)}</b> · <b class="ok">+${Math.round(c.edge * 100)}%</b></span></div>`).join('')}${S ? '' : '<span class="lv-nost">Tempo hesaba katılmadı; "İstatistik getir" ile netleşir.</span>'}</div>`; })()}
+      ${(() => { const E = expectList(x, m); x._ek = new Set(E.map(keyOf)); if (!E.length) return '<div class="lv-sg none">Beklenti: şu an %55 üstü güçlü bir öngörü yok, maç dengeli.</div>';
+        return `<div class="lv-sg ex"><span class="tag">Beklenti</span>${E.map(c => `<div class="lv-s"><b>${c.lab}</b><span class="num">${c.odd ? fx(c.odd) : '–'}</span><span>${c.fair != null ? `model %${Math.round(c.pm * 100)} · iddaa %${Math.round(c.fair * 100)} · birleşik <b>%${Math.round(c.p * 100)}</b>${c.edge >= 0.04 ? ` · <b class="ok">+${Math.round(c.edge * 100)}%</b>` : ''}` : `model <b>%${Math.round(c.p * 100)}</b> · iddaa'da canlı oran yok`}</span></div>`).join('')}</div>`; })()}
+      ${(() => { if (!x.iddI) return ''; const sg = suggest(x, m); sg.good = sg.good.filter(c => !(x._ek && x._ek.has(keyOf(c)))); if (!sg.n) return '<div class="lv-sg none">iddaa bu maçta şu an canlı oran vermiyor.</div>';
+        if (!sg.good.length) return x._ek && x._ek.size && sg.n ? '' : `<div class="lv-sg none">Değerli oran yok: iddaa'nın canlı oranları bizim hesapla uyumlu.${S ? '' : ' İstatistik getirirsen tempo hesaba katılır.'}</div>`;
+        return `<div class="lv-sg"><span class="tag">Değerli (iddaa oranı cömert)</span>${sg.good.map(c => `<div class="lv-s"><b>${c.lab}</b><span class="num">${fx(c.odd)}</span><span>model %${Math.round(c.pm * 100)} · iddaa %${Math.round(c.fair * 100)} · birleşik <b>%${Math.round(c.p * 100)}</b> · <b class="ok">+${Math.round(c.edge * 100)}%</b></span></div>`).join('')}${S ? '' : '<span class="lv-nost">Tempo hesaba katılmadı; "İstatistik getir" ile netleşir.</span>'}</div>`; })()}
       <div class="lv-grid">
         ${cmp(m.pGoal, '_', 'Kalan sürede gol')}
         <div class="lv-p"><span>Sıradaki gol</span><b>${pct(m.nextH)} / ${pct(m.nextA)}</b>${f.ng1 != null ? `<i>iddaa ${pct(f.ng1)} / ${pct(f.ng2)}</i>` : ''}</div>
