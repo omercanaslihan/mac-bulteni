@@ -60,15 +60,17 @@
   // iddaa canlı pazarlarını adlarından sınıflandır: kapsam (ms/iy), taraf (top/ev/dep), tür
   function liveMarkets(x) { const d = iddDet[x.iddI]; const N = (root.__MODEL && root.__MODEL.names) || {}; if (!d) return []; const out = [];
     const cur = { ms: { top: (x.gh || 0) + (x.ga || 0), ev: x.gh || 0, dep: x.ga || 0 }, iy: x.st === '1H' ? { top: (x.gh || 0) + (x.ga || 0), ev: x.gh || 0, dep: x.ga || 0 } : null };
-    for (const z of d.m || []) { if (z.t !== 4 || !z.o || z.o.some(o => !(o.odd > 1.01))) continue; const nm = N['4_' + z.st] || ''; if (/korner|kart|uzat|periyot|set/i.test(nm)) continue;
+    for (const z of d.m || []) { if (z.t !== 4 || !z.o || z.o.some(o => !(o.odd > 1.01))) continue; const nm = N['4_' + z.st] || ''; if (/korner|kart|uzat|periyot|set|handikap|aralığı|skor|dakika|dk\.|penaltı|oyuncu|nasıl|2\.\s*Yarı|iade/i.test(nm)) continue;
+      if (/\sve\s/i.test(nm) || z.o.some(o => /\sve\s|\//.test(String(o.n)))) continue; // birleşik pazarlar (… ve …, İY/MS) tek seçim gibi değerlendirilemez
+      const names = z.o.map(o => String(o.n)); const is = arr => names.length === arr.length && names.every(n => arr.includes(n));
       const scope = /1\.\s*Yarı|İlk Yarı/i.test(nm) ? 'iy' : 'ms'; if (scope === 'iy' && !cur.iy) continue;
       const side = /Ev Sahibi/i.test(nm) ? 'ev' : /Deplasman/i.test(nm) ? 'dep' : 'top';
       const fair = BLD.devig(z.o.map(o => o.odd));
-      if (/Alt\/Üst|Altı\/Üstü/i.test(nm) && z.sov != null) { const c = cur[scope][side]; let L = +z.sov; if (L < c) L += c; // çizgi mevcut golün altındaysa kalan gol üzerinden
+      if (/Alt\/Üst|Altı\/Üstü/i.test(nm) && z.sov != null && is(['Alt', 'Üst'])) { const c = cur[scope][side]; let L = +z.sov; if (L < c) L += c; // çizgi mevcut golün altındaysa kalan gol üzerinden
         z.o.forEach((o, j) => { if (o.n === 'Üst' || o.n === 'Alt') out.push({ type: 'ou', scope, side, L, n: o.n, odd: o.odd, fair: fair[j] }); }); }
-      else if (/Karşılıklı Gol/i.test(nm)) z.o.forEach((o, j) => out.push({ type: 'kg', scope, side: 'top', n: o.n, odd: o.odd, fair: fair[j] }));
-      else if (/Sıradaki Gol.*Takım/i.test(nm)) z.o.forEach((o, j) => out.push({ type: 'next', scope: 'ms', side: 'top', n: o.n, odd: o.odd, fair: fair[j] }));
-      else if (/^Maç Sonucu$/i.test(nm.trim()) || (scope === 'iy' && /Yarı Sonucu$/i.test(nm.trim()))) z.o.forEach((o, j) => out.push({ type: 'res', scope, side: 'top', n: o.n, odd: o.odd, fair: fair[j] })); }
+      else if (/Karşılıklı Gol/i.test(nm) && is(['Var', 'Yok'])) z.o.forEach((o, j) => out.push({ type: 'kg', scope, side: 'top', n: o.n, odd: o.odd, fair: fair[j] }));
+      else if (/Sıradaki Gol.*Takım/i.test(nm) && names.length === 3 && names.includes('1') && names.includes('2')) z.o.forEach((o, j) => out.push({ type: 'next', scope: 'ms', side: 'top', n: o.n, odd: o.odd, fair: fair[j] }));
+      else if ((/^Maç Sonucu$/i.test(nm.trim()) || (scope === 'iy' && /^1\.\s*Yarı Sonucu$/i.test(nm.trim()))) && is(['1', '0', '2'])) z.o.forEach((o, j) => out.push({ type: 'res', scope, side: 'top', n: o.n, odd: o.odd, fair: fair[j] })); }
     return out; }
   // Bizim olasılığımız: verilen seçim için
   function ourP(x, m, c) { const gh = x.gh || 0, ga = x.ga || 0;
