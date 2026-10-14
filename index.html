@@ -144,6 +144,19 @@ body.has-slip .wrap{padding-bottom:110px}
 .slip-act button{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:5px 14px;cursor:pointer}
 .slip-act button:disabled{opacity:.5;cursor:default} #slipSave{background:var(--model);color:var(--surface);border-color:var(--model)}
 @media (prefers-reduced-motion: reduce){.slip-bar .chev{transition:none}}
+.lv-ctl{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:0 16px 10px;font-size:13px}
+.lv-ctl label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.lv-ctl button,#lvBtn,.lv-st{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:4px 12px;cursor:pointer}
+#lvMsg{font-weight:500;text-transform:none;letter-spacing:0;font-size:12.5px}
+.lv-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:10px;padding:0 16px 16px}
+.lv{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0;background:var(--bg)}
+.lv-h{display:flex;justify-content:space-between;gap:8px;align-items:flex-start} .lv-t{font:600 17px/1.15 var(--f-display)} .lv-t b{font-size:16px;margin:0 4px;color:var(--model)}
+.lv-min{font-size:13px;color:var(--good);font-weight:600;white-space:nowrap}
+.lv-meta{font-size:12px;color:var(--muted)} .lv-meta b.up{color:var(--bad)} .lv-meta b.dn,.lv-meta .dn{color:var(--dia)}
+.lv-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.lv-p{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;min-width:0}
+.lv-p b{font:600 15px var(--f-mono);color:var(--ink)} .lv-p i{font-style:normal;font-size:11.5px} .lv-p i.df{color:var(--star);font-weight:600}
+.lv-act{display:flex;gap:8px;align-items:center}
 .csl{font-size:12px;color:var(--muted)} .csl b{color:var(--ink);font-family:var(--f-mono);font-weight:500} .csl b.ok{color:var(--good)}
 .afbox[hidden]{display:none}
 #afMsg{font-size:12.5px;color:var(--muted)}
@@ -161,7 +174,7 @@ tr:has(.gone) td{opacity:.75}
     <p class="eyebrow" id="stamp"></p>
     <h1>Maç Bülteni</h1>
     <p class="lede">iddaa bültenindeki bütün futbol maçları ve bütün seçenekleri. İki ayrı işaret var: <span class="st">★ model</span> büyük 7 ligde takım şutu ve isabetli şutta istatistik modelimizin iddaa marjını aştığı oranlar. <span class="di">◆ piyasa</span> ise iddaa'nın bir seçeneği kendi MS ve 2,5 alt/üst oranlarıyla tutarsız biçimde, yani olması gerekenden yüksek fiyatladığı yerler; her ligde çalışır. Araştırma ve takip aracıdır, bahis tavsiyesi değildir.</p>
-    <div class="live" id="live" role="status"><span class="dot"></span><span id="liveT">iddaa bülteni alınıyor…</span><span class="bar" id="liveBar"><i></i></span><button type="button" id="reload" hidden>Yenile</button><button type="button" id="afBtn" hidden>Skorlar</button><button type="button" id="pfBtn" hidden>Performans</button><button type="button" id="kBtn" hidden>Kupon yap</button></div>
+    <div class="live" id="live" role="status"><span class="dot"></span><span id="liveT">iddaa bülteni alınıyor…</span><span class="bar" id="liveBar"><i></i></span><button type="button" id="reload" hidden>Yenile</button><button type="button" id="afBtn" hidden>Skorlar</button><button type="button" id="pfBtn" hidden>Performans</button><button type="button" id="kBtn" hidden>Kupon yap</button><button type="button" id="lvBtn" hidden>Canlı</button></div>
     <div class="afbox" id="afBox" hidden><label for="afKey">API-Football anahtarı</label><input id="afKey" type="password" autocomplete="off" spellcheck="false" placeholder="dashboard.api-football.com → My Access"><button type="button" id="afSave">Kaydet</button><button type="button" id="afDel">Sil</button><span id="afMsg"></span></div>
     <div class="stats">
       <div><b id="sM"></b>maç</div><div><b id="sL"></b>lig</div><div><b id="sO"></b>seçenek</div>
@@ -169,6 +182,11 @@ tr:has(.gone) td{opacity:.75}
     </div>
   </header>
 
+  <section class="panel" id="canli" hidden>
+    <div class="panel-head"><h2>Canlı maçlar</h2><p>Skor, dakika ve maç istatistiği API-Football'dan gelir. Olasılıklar maç öncesi gol beklentisinden başlar; kalan süreye ve maçın temposuna (xG ya da şut, kırmızı kart) göre güncellenir. Yanındaki "iddaa" iddaa'nın canlı oranından çıkarılan adil olasılıktır; 8 puandan büyük farklar işaretlenir. Canlı model ileriye dönük test edilmedi; iddaa canlı oranları saniyeler içinde güncellenir.</p></div>
+    <div class="lv-ctl"><button type="button" id="lvRef">Yenile</button><label for="lvAll"><input type="checkbox" id="lvAll"> Bülten dışı maçlar</label><label for="lvAuto"><input type="checkbox" id="lvAuto"> 2 dakikada bir yenile (her yenileme 1 istek)</label><span id="lvMsg" class="tag"></span></div>
+    <div id="lvList" class="lv-list"></div>
+  </section>
   <section class="panel" id="kupon" hidden>
     <div class="panel-head"><h2>Kupon önerisi</h2><p>Kaç maç ve hangi toplam oranı istediğini gir. Her maçtan bir seçim alınır; hedef orana ulaşan kombinasyonlar içinde tutma ihtimali en yüksek olan kurulur. Gün seçimi buradan yapılır; aşağıdaki Büyük 7 lig / Tüm ligler ve lig filtreleri de geçerli; başlamış maçlar ve iddaa'nın MBS kuralına uymayan seçimler alınmaz.</p></div>
     <form class="kf" id="kForm" novalidate>
@@ -474,7 +492,7 @@ function startApp(BULTEN){
   kOut.addEventListener('click',ev=>{ if(ev.target.id!=='kToSlip'||!kLast) return; SLIP.set(kLast.sel.map(x=>({i:x.e.i,k:x.k,s:x.s==null?'':String(x.s),n:x.o[0]}))); SLIP.open(); });
   document.getElementById('kForm').onsubmit=ev=>{ ev.preventDefault(); showCoupon(true); };
   kAlt.onclick=()=>showCoupon(false);
-  const kBtn=document.getElementById('kBtn'), kup=document.getElementById('kupon'); kBtn.hidden=false;
+  const kBtn=document.getElementById('kBtn'), kup=document.getElementById('kupon'); kBtn.hidden=false; document.getElementById('lvBtn').hidden=false;
   kBtn.onclick=()=>{ kup.hidden=!kup.hidden; if(!kup.hidden) kup.scrollIntoView({behavior:'smooth',block:'start'}); };
 
   // ---- Performans kaydı: başlamamış maçların tahminlerini dondur ----
@@ -502,6 +520,7 @@ function startApp(BULTEN){
 <script src="builder.js"></script>
 <script src="track.js"></script>
 <script src="slip.js"></script>
+<script src="live.js"></script>
 <script>
 (function(){
   const IDD='https://sportsbookv2.iddaa.com/sportsbook';
@@ -523,7 +542,7 @@ function startApp(BULTEN){
   async function boot(){
     try{
       const [model,list,comps]=await Promise.all([ fetch('model.json').then(r=>r.json()), get(IDD+'/events?st=1&type=0&version=0'), get(IDD+'/competitions').catch(()=>null) ]);
-      M=model; CN=Object.assign({},M.comps); if(Array.isArray(comps)) for(const c of comps) if(c&&c.i!=null&&c.n) CN[c.i]=c.n;
+      M=model; window.__MODEL=M; CN=Object.assign({},M.comps); if(Array.isArray(comps)) for(const c of comps) if(c&&c.i!=null&&c.n) CN[c.i]=c.n;
       const now=Date.now()/1000; const evs=(list.events||[]).filter(e=>e.sid===1&&e.d>now-120&&e.m&&e.m.length);
       const big=evs.filter(e=>M.BIG[e.ci]);
       say(`${evs.length} maç alındı · büyük liglerin ayrıntıları yükleniyor (0/${big.length})`);
