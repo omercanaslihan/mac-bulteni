@@ -38,12 +38,19 @@
   // results: Map maçId → skor nesnesi
   async function settle(results) {
     try { const db = await open(); const rs = await all(); const tx = db.transaction('r', 'readwrite'); const st = tx.objectStore('r'); let n = 0;
-      for (const r of rs) { if (r.res != null) continue; const x = results.get(r.i); if (!x) continue; const v = judge(r, x); if (v == null) { if (FIN.has(x.st) && !(STATK.has(r.k) && !x.stat)) { r.res = 'na'; r.sc = x.fh + ':' + x.fa; st.put(r); } continue; }
+      for (const r of rs) { if (r.res != null || r.t !== 'kupon') continue; let all = true, lost = false;
+        for (const l of r.legs) { const x = results.get(l.i); const v = x ? judge(l, x) : null; if (v === false) lost = true; else if (v !== true) all = false; }
+        if (lost || all) { r.res = !lost; r.settledAt = Math.round(Date.now() / 1000); st.put(r); n++; } }
+      for (const r of rs) { if (r.res != null || r.t === 'kupon') continue; const x = results.get(r.i); if (!x) continue; const v = judge(r, x); if (v == null) { if (FIN.has(x.st) && !(STATK.has(r.k) && !x.stat)) { r.res = 'na'; r.sc = x.fh + ':' + x.fa; st.put(r); } continue; }
         r.res = v; r.sc = x.fh + ':' + x.fa; r.settledAt = Math.round(Date.now() / 1000); st.put(r); n++; }
       await done(tx); return n; } catch (e) { return 0; }
   }
   function needStat(r) { return STATK.has(r.k) && r.res == null; }
-  async function pending() { const now = Date.now() / 1000; return (await all()).filter(r => r.res == null && r.d < now - 2.5 * 3600 && r.d > now - 10 * 86400); }
+  async function saveCoupon(legs, odd, p) { try { const db = await open(); const tx = db.transaction('r', 'readwrite'); const now = Math.round(Date.now() / 1000);
+      const d = Math.max(...legs.map(l => l.d)); const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date(Math.min(...legs.map(l => l.d)) * 1000));
+      tx.objectStore('r').put({ id: 'kupon|' + now + '|' + Math.random().toString(36).slice(2, 7), t: 'kupon', i: null, d, day, legs, lab: legs.length + ' maç: ' + legs.map(l => l.lab).join(' + '), cn: '', h: '', a: '', big: legs.some(l => l.big) ? 1 : 0, p: p ?? null, fp: null, odd, odd0: odd, at: now, at0: now, res: null });
+      await done(tx); } catch (e) { } }
+  async function pending() { const now = Date.now() / 1000; const out = []; for (const r of await all()) { if (r.res != null || r.d > now - 2.5 * 3600 || r.d < now - 10 * 86400) continue; if (r.t === 'kupon') { for (const l of r.legs) if (l.d < now - 2.5 * 3600) out.push({ i: l.i, d: l.d, h: l.h, a: l.a }); } else out.push(r); } return out; }
 
   // ---------- Görünüm ----------
   const pct = p => p == null || isNaN(p) ? '–' : '%' + (p * 100).toFixed(1).replace('.', ',');
@@ -82,7 +89,7 @@
       <div class="pf-head"><p>${first ? `Kayıt ${first} tarihinden beri bu cihazda tutuluyor.` : 'Henüz kayıt yok: uygulama her açıldığında başlamamış maçların tahminleri kaydedilir.'} ${nOpen} maç henüz başlamadı, ${wait} maçın sonucu bekleniyor. Şut ve korner, maç bitince API-Football istatistiğinden puanlanır (büyük 7 lig).</p>
         <div class="chips" role="group" aria-label="Kapsam"><button type="button" data-pf="all" aria-pressed="${!scopeBig}">Tüm ligler</button><button type="button" data-pf="big" aria-pressed="${scopeBig}">Büyük 7 lig</button></div></div>
       <div class="tbl"><table><thead><tr><th>Tahmin</th><th class="n">Sonuçlanan</th><th class="n">Beklenen</th><th class="n">Tuttu</th><th class="n">Ort. oran</th><th class="n">Birim</th><th class="n" title="Bizim olasılık / iddaa adil olasılığı. Küçük olan daha isabetli.">Log-loss biz / piyasa</th><th class="n" title="Seçtiğimiz oran ilk görüldüğünden maç saatine kadar ne kadar düştü. Artı = piyasa bizim yönümüze geldi.">Oran hareketi</th></tr></thead><tbody>
-        ${row('Banko (1,30+)', 'banko')}${row('<span class="st">★</span> Model (şut)', 'star', 'maç istatistiği bekleniyor')}${row('<span class="di">◆</span> Piyasa', 'dia')}${row('Skor (3 skordan biri)', 'cs')}${row('Şut modeli (bütün çizgiler)', 'sut', 'büyük 7 lig')}${row('Korner modeli (bütün çizgiler)', 'kor', 'büyük 7 lig')}
+        ${row('Kuponlarım', 'kupon', 'alttaki kupondan kaydedilenler')}${row('Banko (1,30+)', 'banko')}${row('<span class="st">★</span> Model (şut)', 'star', 'maç istatistiği bekleniyor')}${row('<span class="di">◆</span> Piyasa', 'dia')}${row('Skor (3 skordan biri)', 'cs')}${row('Şut modeli (bütün çizgiler)', 'sut', 'büyük 7 lig')}${row('Korner modeli (bütün çizgiler)', 'kor', 'büyük 7 lig')}
       </tbody></table></div>
       <p class="pf-note">${ms ? `<b>Piyasayı geçiyor muyuz? (büyük 7 lig, MS, ${ms.n} maç)</b> En olası sonuç bizde ${pct(ms.hitU)}, iddaa'da ${pct(ms.hitM)} tuttu. Log-loss bizde ${ms.llU.toFixed(4)}, iddaa'da ${ms.llM.toFixed(4)} (küçük olan daha isabetli; ${ms.llU < ms.llM ? 'şu an biz öndeyiz' : 'şu an piyasa önde'}). Anlamlı fark için birkaç yüz maç gerekir.` : '<b>Piyasayı geçiyor muyuz?</b> Büyük 7 ligde MS tahminimiz ile iddaa\'nın adil olasılığı her maçta karşılaştırılacak; ilk maçlar bitince burada görünür.'}</p>
       <div class="pf-grid">
@@ -97,5 +104,5 @@
       const csv = '﻿' + ['gün;lig;ev;deplasman;tür;tahmin;olasılık;piyasa;ilk oran;son oran;sonuç;skor;büyük lig'].concat(R.filter(r => r.t !== 'ms').sort((a, b) => a.d - b.d).map(r => cols.map(c => esc(c === 'res' ? (r.res === true ? 'tuttu' : r.res === false ? 'yattı' : '') : r[c])).join(';'))).join('\n');
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'mac-bulteni-takip.csv'; document.body.appendChild(a); a.click(); a.remove(); };
   }
-  root.TRK = { capture, settle, pending, all, render, judge, needStat, STATK };
+  root.TRK = { capture, settle, pending, all, render, judge, needStat, STATK, saveCoupon };
 })(window);

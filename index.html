@@ -125,6 +125,25 @@ section.method p{margin:0;font-size:13.5px;color:var(--muted)}
 .pf svg{display:block;width:100%;height:auto} .pf svg text{fill:var(--muted);font:11px var(--f-body)}
 .pf-foot{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px}
 .pf-foot button,#pfBtn{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:4px 12px;cursor:pointer}
+.add{font:600 13px/1 var(--f-body);width:22px;height:22px;border-radius:50%;border:1px solid var(--model);background:var(--surface);color:var(--model);cursor:pointer;margin-right:6px;padding:0;vertical-align:middle;flex:none}
+.add.on{background:var(--model);color:var(--surface)}
+.kcta{padding:0 16px 4px} .kcta button{font:500 13px var(--f-body);border:1px solid var(--model);background:var(--surface);color:var(--model);border-radius:999px;padding:5px 14px;cursor:pointer}
+body.has-slip .wrap{padding-bottom:110px}
+.slip{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:0 12px calc(10px + env(safe-area-inset-bottom,0px));pointer-events:none}
+.slip-in{max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.18);pointer-events:auto;overflow:hidden}
+.slip-bar{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border:0;background:var(--ink);color:var(--surface);font:500 14px var(--f-body);cursor:pointer;text-align:left}
+.slip-bar b{font-family:var(--f-mono);font-weight:600} .slip-bar .chev{transition:transform .2s} .slip-bar[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.slip-note{display:block;font-size:12px;opacity:.8;margin-top:2px}
+.slip-body{max-height:min(60vh,520px);overflow:auto;padding:8px 0 12px}
+.slip-leg{display:grid;grid-template-columns:minmax(0,1fr) auto 32px;gap:8px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--line);font-size:13.5px}
+.slip-leg.gone{opacity:.55} .sl-n{text-align:right;font-family:var(--f-mono)} .sl-x{border:0;background:none;color:var(--muted);font-size:20px;cursor:pointer}
+.slip-warn{margin:8px 16px;padding:8px 10px;border-radius:8px;background:var(--warnbg);font-size:12.5px}
+.slip-tot{display:flex;flex-wrap:wrap;gap:6px 24px;padding:10px 16px;font-size:12.5px;color:var(--muted)} .slip-tot b{display:block;font:600 20px var(--f-mono);color:var(--ink)}
+.slip-hint{margin:0 16px 8px;font-size:12px;color:var(--muted)}
+.slip-act{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding:0 16px}
+.slip-act button{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--model);border-radius:999px;padding:5px 14px;cursor:pointer}
+.slip-act button:disabled{opacity:.5;cursor:default} #slipSave{background:var(--model);color:var(--surface);border-color:var(--model)}
+@media (prefers-reduced-motion: reduce){.slip-bar .chev{transition:none}}
 .csl{font-size:12px;color:var(--muted)} .csl b{color:var(--ink);font-family:var(--f-mono);font-weight:500} .csl b.ok{color:var(--good)}
 .afbox[hidden]{display:none}
 #afMsg{font-size:12.5px;color:var(--muted)}
@@ -258,6 +277,7 @@ function startApp(BULTEN){
   const csHit=e=>{ const r=e.res; if(!e.cs||!r||!FIN.has(r.st)||r.fh==null) return null; return e.cs.some(c=>c[0]===r.fh+':'+r.fa); };
   const csLine=(e,short)=>{ if(!e.cs) return ''; const r=e.res, act=r&&FIN.has(r.st)&&r.fh!=null?r.fh+':'+r.fa:null;
     return e.cs.map(([k,p])=>`<b${act===k?' class="ok"':''}>${fsc(k)}</b>${short?'':' <span class="num">'+pct(p)+'</span>'}`).join(short?' · ':' &nbsp;·&nbsp; ')+mark(csHit(e)); };
+  const addB=(e,k,sv,n)=>e.d>now+60&&!e.snap?`<button type="button" class="add${window.SLIP&&SLIP.has(e.i,k,sv,n)?' on':''}" data-e="${e.i}" data-k="${k}" data-s="${sv==null?'':sv}" data-n="${String(n).replace(/"/g,'&quot;')}" aria-label="Kupona ekle" title="Kupona ekle">${window.SLIP&&SLIP.has(e.i,k,sv,n)?'✓':'+'}</button>`:'';
   const mark=v=>v===true?' <span class="ok" title="Tuttu">✓</span>':v===false?' <span class="no" title="Yattı">✗</span>':'';
   function scoreTag(e){ const r=e.res; if(!r) return e.d<now?`<span class="tag gone">${e.d<now-7200?'oynandı':'başladı'}</span>`:'';
     if(FIN.has(r.st)) return `<span class="tag sc">${r.fh}–${r.fa}${r.hh!=null?` (İY ${r.hh}–${r.ha})`:''}${r.st!=='FT'?' · uzatma':''}</span>`;
@@ -340,7 +360,7 @@ function startApp(BULTEN){
   const visK=e=>(lig?e.cn===lig:(scope==='all'||e.big))&&(!q||(e.h+' '+e.a+' '+e.cn).toLocaleLowerCase('tr').includes(q))&&(!onlyMark||e.ns||e.nd);
   const vis=e=>(lig?e.cn===lig:(scope==='all'||e.big))&&(!days.size||days.has(e.day))&&(!q||(e.h+' '+e.a+' '+e.cn).toLocaleLowerCase('tr').includes(q))&&(!onlyMark||e.ns||e.nd);
   function selLabel(e,k,s,o){ if(k==='2_912') return 'Şut · '+o[0]; if(k==='2_913') return 'İsabetli şut · '+o[0]; if(k==='2_822') return e.h+' korner '+String(s).replace('.',',')+' '+o[0]; if(k==='2_823') return e.a+' korner '+String(s).replace('.',',')+' '+o[0]; return mTitle(k,s)+' · '+o[0]; }
-  function listRows(arr,kind,limit){ return arr.slice(0,limit).map(({e,k,s,o,ed})=>`<tr class="${kind}"><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><span class="${kind==='star'?'st':'di'}">${kind==='star'?'★':'◆'}</span> ${selLabel(e,k,s,o)}${mark(settle(e,k,s,o[0]))}</td><td class="num">${pct(kind==='star'?o[2]:o[3])}</td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${kind==='star'?'p':'d'}">+${Math.round(ed*100)}%</td></tr>`).join(''); }
+  function listRows(arr,kind,limit){ return arr.slice(0,limit).map(({e,k,s,o,ed})=>`<tr class="${kind}"><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span></td><td><span class="${kind==='star'?'st':'di'}">${kind==='star'?'★':'◆'}</span> ${addB(e,k,s,o[0])}${selLabel(e,k,s,o)}${mark(settle(e,k,s,o[0]))}</td><td class="num">${pct(kind==='star'?o[2]:o[3])}</td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${kind==='star'?'p':'d'}">+${Math.round(ed*100)}%</td></tr>`).join(''); }
   let dLimit=40, tLimit=30, sLimit=30, minO=1.30, preset=7;
   document.getElementById('moreD').onclick=()=>{dLimit+=60; render();};
   document.getElementById('moreT').onclick=()=>{tLimit+=40; render();};
@@ -348,15 +368,15 @@ function startApp(BULTEN){
   const mOI=document.getElementById('minO'); mOI.value=minO.toFixed(2); mOI.onchange=()=>{ const v=parseFloat(String(mOI.value).replace(',','.')); if(v>=1.01&&v<=10){minO=v;} mOI.value=minO.toFixed(2); render(); };
   const pS=document.getElementById('preset'); pS.innerHTML=PRESETS.map((p,i)=>`<option value="${i}">${p[0]}</option>`).join(''); pS.value=preset; pS.onchange=()=>{preset=+pS.value; sLimit=30; render();};
   const pick=(x,kind)=>{ const {e,k,s,o,p}=x; const ed=p*o[1]-1; const st=isStar(e,k,o), di=isDia(e,k,o);
-    return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span>${e.cs?`<br><span class="csl">Skor: ${csLine(e,true)}</span>`:''}</td><td><b>${shortLabel(e,k,s,o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}${mark(settle(e,k,s,o[0]))}</td><td class="num"><b>${pct(p)}</b></td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${ed>0?'d':''}">${ed>0?'+':''}${Math.round(ed*100)}%</td></tr>`; };
-  function cells(e,k,o){ const st=isStar(e,k,o), di=isDia(e,k,o); const m=eM(o), f=eF(o);
+    return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${when(e)}</td><td>${e.h} – ${e.a}<br><span class="tag">${e.cn}</span>${e.cs?`<br><span class="csl">Skor: ${csLine(e,true)}</span>`:''}</td><td>${addB(e,k,s,o[0])}<b>${shortLabel(e,k,s,o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}${mark(settle(e,k,s,o[0]))}</td><td class="num"><b>${pct(p)}</b></td><td class="num">${o[1].toFixed(2)}</td><td class="diff ${ed>0?'d':''}">${ed>0?'+':''}${Math.round(ed*100)}%</td></tr>`; };
+  function cells(e,k,o,sv){ const st=isStar(e,k,o), di=isDia(e,k,o); const m=eM(o), f=eF(o);
     let diff='<td class="na">–</td>'; if(e.big&&m!=null&&TRUST_A.has(k)) diff=`<td class="diff ${m>0?'p':''}">${m>0?'+':''}${Math.round(m*100)}%</td>`; else if(f!=null) diff=`<td class="diff ${f>0?'d':''}">${f>0?'+':''}${Math.round(f*100)}%</td>`;
-    return `<tr${st?' class="star"':di?' class="dia"':''}><td>${st?'<span class="st" title="Model: değerli">★</span> ':''}${di?'<span class="di" title="Piyasa içi fark">◆</span> ':''}${o[0]}</td>${e.big?`<td class="num">${o[2]==null?'<span class="na">–</span>':pct(o[2])}</td>`:''}<td class="num">${o[3]==null?'<span class="na">–</span>':pct(o[3])}</td><td class="num">${odd(o[1])}</td>${diff}</tr>`; }
+    return `<tr${st?' class="star"':di?' class="dia"':''}><td>${addB(e,k,sv,o[0])}${st?'<span class="st" title="Model: değerli">★</span> ':''}${di?'<span class="di" title="Piyasa içi fark">◆</span> ':''}${o[0]}</td>${e.big?`<td class="num">${o[2]==null?'<span class="na">–</span>':pct(o[2])}</td>`:''}<td class="num">${o[3]==null?'<span class="na">–</span>':pct(o[3])}</td><td class="num">${odd(o[1])}</td>${diff}</tr>`; }
   function marketTable(e,keys){ const ms=e.m.filter(m=>keys.includes(m[0])).sort((a,b)=>keys.indexOf(a[0])-keys.indexOf(b[0])||String(a[1]).localeCompare(String(b[1]),'tr',{numeric:true}));
     if(!ms.length) return '<div class="empty">iddaa bu pazarları açmamış.</div>';
     const cols=e.big?5:4;
     return `<div class="tbl"><table><thead><tr><th>Seçenek</th>${e.big?'<th>Model</th>':''}<th>Adil</th><th>Oran</th><th>Fark</th></tr></thead><tbody>${ms.map(([k,s,os])=>
-      `<tr><td colspan="${cols}" class="mt">${mTitle(k,s)} ${e.big&&TRUST_A.has(k)?'<span class="trust">· model kanıtlı</span>':e.big&&EXP.has(k)?'<span class="trust">· deneysel</span>':''}</td></tr>`+os.map(o=>cells(e,k,o)).join('')).join('')}</tbody></table></div>`; }
+      `<tr><td colspan="${cols}" class="mt">${mTitle(k,s)} ${e.big&&TRUST_A.has(k)?'<span class="trust">· model kanıtlı</span>':e.big&&EXP.has(k)?'<span class="trust">· deneysel</span>':''}</td></tr>`+os.map(o=>cells(e,k,o,s)).join('')).join('')}</tbody></table></div>`; }
   function card(e){ const m=e.mean;
     const groups=GROUPS.map(([name,keys])=>{ const ms=e.m.filter(x=>keys.includes(x[0])); if(!ms.length) return ''; const n=ms.reduce((s,x)=>s+x[2].length,0);
       const ns=ms.reduce((s,[k,sv,os])=>s+os.filter(o=>isStar(e,k,o)).length,0), nd=ms.reduce((s,[k,sv,os])=>s+os.filter(o=>isDia(e,k,o)).length,0);
@@ -400,7 +420,7 @@ function startApp(BULTEN){
     const order=[...byC.entries()].sort((a,b)=>(b[1][0].big-a[1][0].big)||((b[1].reduce((s,e)=>s+e.ns+e.nd,0))-(a[1].reduce((s,e)=>s+e.ns+e.nd,0)))||b[1].length-a[1].length);
     document.getElementById('groups').innerHTML= order.length? order.map(([ci,es],i)=>{ es.sort((a,b)=>a.d-b.d); const ns=es.reduce((s,e)=>s+e.ns,0), nd=es.reduce((s,e)=>s+e.nd,0);
       return `<details class="lg" data-c="${ci}"${i<3&&order.length<40?' open':''}><summary><span class="n">${es[0].cn}</span><span class="tag">${es.length} maç${ns?` · <span class="st">★${ns}</span>`:''}${nd?` · <span class="di">◆${nd}</span>`:''}</span></summary>${(i<3&&order.length<40)?es.map(card).join(''):''}</details>`; }).join('') : '<div class="empty">Bu filtreye uyan maç yok.</div>';
-    window.__curByC=byC;
+    window.__curByC=byC; if(window.SLIP&&window.__app) SLIP.update();
   }
   const G=document.getElementById('groups');
   G.addEventListener('toggle',ev=>{ const d=ev.target; if(!d.open) return;
@@ -443,7 +463,7 @@ function startApp(BULTEN){
     const r=buildCoupon(N,Y,mode,kEx,MIN);
     if(r.err){ kOut.innerHTML=`<p class="empty">${r.err}</p>`; kAlt.hidden=true; return; }
     r.sel.forEach(x=>kEx.add(x.e.i)); kAlt.hidden=false; kLast=r;
-    kOut.innerHTML=`<div class="ktot"><div><b>${r.O.toFixed(2).replace('.',',')}</b>toplam oran</div><div><b>%${(r.P*100).toFixed(1).replace('.',',')}</b>tutma ihtimali</div>${r.F!=null?`<div><b>%${(r.F*100).toFixed(1).replace('.',',')}</b>iddaa'nın kendi fiyatına göre</div>`:''}<div><b class="${r.ev>=0?'ok':'no'}">${r.ev>=0?'+':''}${Math.round(r.ev*100)}%</b>beklenen değer</div></div>
+    kOut.innerHTML=`<div class="kcta"><button type="button" id="kToSlip">Bu kuponu alttaki kupona aktar</button></div><div class="ktot"><div><b>${r.O.toFixed(2).replace('.',',')}</b>toplam oran</div><div><b>%${(r.P*100).toFixed(1).replace('.',',')}</b>tutma ihtimali</div>${r.F!=null?`<div><b>%${(r.F*100).toFixed(1).replace('.',',')}</b>iddaa'nın kendi fiyatına göre</div>`:''}<div><b class="${r.ev>=0?'ok':'no'}">${r.ev>=0?'+':''}${Math.round(r.ev*100)}%</b>beklenen değer</div></div>
       <div class="tbl"><table class="list"><thead><tr><th>Saat</th><th>Maç</th><th>Tercih</th><th>Olasılık</th><th>Oran</th><th>MBS</th></tr></thead><tbody>${r.sel.map(x=>{ const st=isStar(x.e,x.k,x.o), di=isDia(x.e,x.k,x.o); const mb=(x.e.m.find(m=>m[0]===x.k&&m[1]===x.s)||[])[3];
         return `<tr${st?' class="star"':di?' class="dia"':''}><td class="num">${fT.format(new Date(x.e.d*1000))}</td><td>${x.e.h} – ${x.e.a}<br><span class="tag">${x.e.cn}</span></td><td><b>${shortLabel(x.e,x.k,x.s,x.o[0])}</b>${st?' <span class="st">★</span>':''}${di?' <span class="di">◆</span>':''}</td><td class="num">${pct(x.p)}</td><td class="num">${x.o[1].toFixed(2)}</td><td class="num">${mb??'–'}</td></tr>`; }).join('')}</tbody></table></div>
       ${mode==='sut'?'<p class="knote"><b>Şut kuponu:</b> olasılıklar sadece istatistik modelinden (büyük 7 lig, yeterli verisi olan takımlar). Bu pazarda iddaa iki yönlü fiyat vermediği için piyasa karşılaştırması yok; şut seçimleri henüz ileriye dönük test edilmedi.</p>':''}${mode==='kor'?'<p class="knote"><b>Korner kuponu:</b> korner modelimiz geri testte fazla iddialı çıktığı için burada sadece iddaa\'nın kendi fiyatı kullanılıyor.</p>':''}<p class="knote">Her seçimde temkinli olasılık kullanılır: bizim tahminimiz ile iddaa'nın o pazardaki kendi fiyatından hangisi düşükse o. Böylece modelin aşırı iyimser olduğu yerler kupona hayali değer katmaz. Tutma ihtimali, seçimlerin birbirinden bağımsız olduğu varsayımıyla olasılıkların çarpımıdır. Beklenen değer = ihtimal × toplam oran − 1; iddaa her seçimde pay aldığı için maç sayısı arttıkça genelde daha çok eksiye düşer. Oranlar sayfa açıldığında alındı, oynamadan önce iddaa'da kontrol et. Bu bir araştırma aracıdır, bahis tavsiyesi değildir.</p>`; }
@@ -451,6 +471,7 @@ function startApp(BULTEN){
     const today=dayKey(Date.now()/1000), tom=dayKey(Date.now()/1000+86400);
     kD.innerHTML='<option value="">Tüm günler</option>'+dd.map(d=>`<option value="${d}">${d===today?'Bugün · ':d===tom?'Yarın · ':''}${fDay.format(new Date(d+'T12:00:00Z'))} (${D.events.filter(e=>e.day===d&&e.d>t0&&!e.snap).length} maç)</option>`).join('');
     kD.value=dd.includes(today)?today:''; }
+  kOut.addEventListener('click',ev=>{ if(ev.target.id!=='kToSlip'||!kLast) return; SLIP.set(kLast.sel.map(x=>({i:x.e.i,k:x.k,s:x.s==null?'':String(x.s),n:x.o[0]}))); SLIP.open(); });
   document.getElementById('kForm').onsubmit=ev=>{ ev.preventDefault(); showCoupon(true); };
   kAlt.onclick=()=>showCoupon(false);
   const kBtn=document.getElementById('kBtn'), kup=document.getElementById('kupon'); kBtn.hidden=false;
@@ -470,11 +491,17 @@ function startApp(BULTEN){
     for(const x of DIAS) if(pre.has(x.e.i)) out.push({...base(x.e),id:`${x.e.i}|dia|${x.k}|${x.s}|${x.o[0]}`,t:'dia',k:x.k,s:x.s,n:x.o[0],lab:selLabel(x.e,x.k,x.s,x.o),p:x.o[3],fp:null,odd:x.o[1]});
     return {out,pre}; }
   if(window.TRK){ const {out,pre}=trackRecs(); TRK.capture(out,pre); }
-  window.__app={D,render};
+  // Kupon çubuğu için: bir seçimi bul ve temkinli olasılığını hesapla
+  function resolveLeg(L){ const e=D.events.find(x=>x.i==L.i); if(!e) return null; const row=e.m.find(m=>m[0]===L.k&&String(m[1]??'')===String(L.s??'')); if(!row) return null;
+    const j=row[2].findIndex(o=>o[0]===L.n); if(j<0) return null; const o=row[2][j]; const shot=SHOT.has(L.k); const OP=shot?null:ownP(L.k,row[2]); const pr=Pr(e,L.k,o), po=OP?OP[j]:null;
+    const p=shot?pr:(pr!=null&&po!=null?Math.min(pr,po):(po??pr)); return {e,k:L.k,s:row[1],o,p,po,mbc:row[3],lab:shortLabel(e,L.k,row[1],o[0])}; }
+  window.__app={D,render,resolveLeg,fT,pct,settle};
+  if(window.SLIP) SLIP.update();
 }
 </script>
 <script src="builder.js"></script>
 <script src="track.js"></script>
+<script src="slip.js"></script>
 <script>
 (function(){
   const IDD='https://sportsbookv2.iddaa.com/sportsbook';
@@ -560,7 +587,7 @@ function startApp(BULTEN){
     try{ const P=(await TRK.pending()).filter(r=>!res.has(r.i)); const days=[...new Set(P.map(r=>dayOf(r.d)))].sort().slice(-4);
       for(const d of days){ const r=await afDay(d,key,false).catch(()=>null); if(!r) continue; const objs=[...new Map(P.filter(x=>dayOf(x.d)===d).map(x=>[x.i,{i:x.i,d:x.d,h:x.h,a:x.a}])).values()]; attach(objs,r.fx); for(const o of objs) if(o.res) res.set(o.i,o.res); } }catch(e){}
     // Şut/korner: biten büyük lig maçları için maç istatistiği (maç başına 1 istek, en fazla 25/açılış, cihazda saklanır)
-    try{ const need=new Set((await TRK.all()).filter(r=>TRK.needStat(r)&&res.has(r.i)&&['FT','AET','PEN'].includes(res.get(r.i).st)&&res.get(r.i).fid).map(r=>r.i)); let q=0;
+    try{ const need=new Set((await TRK.all()).flatMap(r=>r.t==='kupon'?(r.res==null?r.legs:[]):[r]).filter(r=>TRK.needStat(r)&&res.has(r.i)&&['FT','AET','PEN'].includes(res.get(r.i).st)&&res.get(r.i).fid).map(r=>r.i)); let q=0;
       for(const i of need){ const x=res.get(i); const ck='mb_st_'+x.fid; let st=null; try{ st=JSON.parse(ls.get(ck)||'null'); }catch(e){}
         if(!st){ if(q>=25) continue; q++; try{ const r=await fetch(AF+'/fixtures/statistics?fixture='+x.fid,{headers:{'x-apisports-key':key}}); const j=await r.json();
             const T=j&&j.response||[]; const get=(t,name)=>{ const v=(t.statistics||[]).find(z=>z.type===name); return v&&v.value!=null?+v.value:null; };
@@ -572,5 +599,11 @@ function startApp(BULTEN){
   if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();
 </script>
+<div class="slip" id="slip" hidden>
+  <div class="slip-in">
+    <button type="button" class="slip-bar" id="slipBar" aria-expanded="false" aria-controls="slipBody"><span id="slipSum"></span><span class="chev" aria-hidden="true">▲</span></button>
+    <div class="slip-body" id="slipBody" hidden></div>
+  </div>
+</div>
 </body>
 </html>
