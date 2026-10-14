@@ -50,6 +50,20 @@
       const d = Math.max(...legs.map(l => l.d)); const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date(Math.min(...legs.map(l => l.d)) * 1000));
       tx.objectStore('r').put({ id: 'kupon|' + now + '|' + Math.random().toString(36).slice(2, 7), t: 'kupon', i: null, d, day, legs, lab: legs.length + ' maç: ' + legs.map(l => l.lab).join(' + '), cn: '', h: '', a: '', big: legs.some(l => l.big) ? 1 : 0, p: p ?? null, fp: null, odd, odd0: odd, at: now, at0: now, res: null });
       await done(tx); } catch (e) { } }
+  // Canlı öneriler: fixture id ile, maç sonu (ve İY) skoruyla puanlanır
+  const liveSaved = new Set();
+  async function saveLive(recs) { const fresh = recs.filter(r => !liveSaved.has(r.id)); if (!fresh.length) return; try { const db = await open(); const old = new Set((await all()).map(r => r.id)); const tx = db.transaction('r', 'readwrite'); const st = tx.objectStore('r');
+      for (const r of fresh) { liveSaved.add(r.id); if (!old.has(r.id)) st.put(r); } await done(tx); } catch (e) { } }
+  function judgeLive(r, x) { if (!x || !FIN.has(x.st) || x.fh == null) return null; const c = r.c; const iy = c.scope === 'iy';
+    const H = iy ? x.hh : x.fh, A = iy ? x.ha : x.fa; if (H == null || A == null) return null;
+    if (c.type === 'ou') { const v = c.side === 'ev' ? H : c.side === 'dep' ? A : H + A; return c.n === 'Üst' ? v > c.L : v < c.L; }
+    if (c.type === 'kg') { const v = H > 0 && A > 0; return c.n === 'Var' ? v : !v; }
+    if (c.type === 'res') { const R = H > A ? '1' : H === A ? '0' : '2'; return R === c.n; }
+    if (c.type === 'next') { const dh = x.fh - r.gh, da = x.fa - r.ga; if (dh === 0 && da === 0) return c.n !== '1' && c.n !== '2'; if (dh > 0 && da > 0) return null; return (dh > 0 ? '1' : '2') === c.n; }
+    return null; }
+  async function settleLive(byFid) { try { const db = await open(); const rs = (await all()).filter(r => r.t && r.t.startsWith('canli') && r.res == null); const tx = db.transaction('r', 'readwrite'); const st = tx.objectStore('r'); let n = 0;
+      for (const r of rs) { const x = byFid.get(r.fid); if (!x || !FIN.has(x.st)) continue; const v = judgeLive(r, x); r.res = v == null ? 'na' : v; r.sc = x.fh + ':' + x.fa; st.put(r); n++; } await done(tx); return n; } catch (e) { return 0; } }
+  async function pendingLiveDays() { const now = Date.now() / 1000; const D = new Set(); for (const r of await all()) if (r.t && r.t.startsWith('canli') && r.res == null && r.d < now - 2 * 3600 && r.d > now - 10 * 86400) D.add(r.day); return [...D]; }
   async function pending() { const now = Date.now() / 1000; const out = []; for (const r of await all()) { if (r.res != null || r.d > now - 2.5 * 3600 || r.d < now - 10 * 86400) continue; if (r.t === 'kupon') { for (const l of r.legs) if (l.d < now - 2.5 * 3600) out.push({ i: l.i, d: l.d, h: l.h, a: l.a }); } else out.push(r); } return out; }
 
   // ---------- Görünüm ----------
@@ -57,10 +71,10 @@
   const sg = x => (x >= 0 ? '+' : '') + x.toFixed(2).replace('.', ',');
   const ll = (p, y) => -Math.log(Math.min(0.995, Math.max(0.005, y ? p : 1 - p)));
   function stats(rs) { const S = rs.filter(r => r.res === true || r.res === false); const n = S.length; if (!n) return { n: 0 };
-    const w = S.filter(r => r.res).length, exp = S.reduce((t, r) => t + r.p, 0) / n, u = S.reduce((t, r) => t + (r.res ? r.odd - 1 : -1), 0);
+    const SO = S.filter(r => r.odd); const w = S.filter(r => r.res).length, exp = S.reduce((t, r) => t + r.p, 0) / n, u = SO.length ? SO.reduce((t, r) => t + (r.res ? r.odd - 1 : -1), 0) : null;
     const F = S.filter(r => r.fp != null); const llU = F.length ? F.reduce((t, r) => t + ll(r.p, r.res), 0) / F.length : null, llM = F.length ? F.reduce((t, r) => t + ll(r.fp, r.res), 0) / F.length : null;
-    const M = rs.filter(r => r.odd0 && r.odd && r.odd0 !== r.odd); const mv = rs.length ? rs.reduce((t, r) => t + (r.odd0 / r.odd - 1), 0) / rs.length : 0;
-    return { n, w, hit: w / n, exp, u, roi: u / n, llU, llM, nF: F.length, mv, nMv: M.length, odd: S.reduce((t, r) => t + r.odd, 0) / n }; }
+    const M = rs.filter(r => r.odd0 && r.odd && r.odd0 !== r.odd); const MO = rs.filter(r => r.odd0 && r.odd); const mv = MO.length ? MO.reduce((t, r) => t + (r.odd0 / r.odd - 1), 0) / MO.length : 0;
+    return { n, w, hit: w / n, exp, u, roi: u != null ? u / SO.length : null, llU, llM, nF: F.length, mv, nMv: M.length, odd: SO.length ? SO.reduce((t, r) => t + r.odd, 0) / SO.length : null, nO: SO.length }; }
   function msStats(rs) { const S = rs.filter(r => typeof r.res === 'number'); if (!S.length) return null; let a = 0, b = 0, ha = 0, hb = 0;
     for (const r of S) { a -= Math.log(Math.max(1e-3, r.pm[r.res])); b -= Math.log(Math.max(1e-3, r.pf[r.res])); ha += r.pm.indexOf(Math.max(...r.pm)) === r.res; hb += r.pf.indexOf(Math.max(...r.pf)) === r.res; }
     return { n: S.length, llU: a / S.length, llM: b / S.length, hitU: ha / S.length, hitM: hb / S.length }; }
@@ -79,7 +93,7 @@
     const first = A.length ? new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' }).format(new Date(Math.min(...A.map(r => r.at0 || r.at)) * 1000)) : null;
     const nowS = Date.now() / 1000, nOpen = new Set(rs.filter(r => r.res == null && r.d > nowS).map(r => r.i)).size, wait = new Set(rs.filter(r => r.res == null && r.d <= nowS).map(r => r.i)).size;
     const row = (name, t, note) => { const s = stats(by(t)); if (!s.n) return `<tr><td>${name}</td><td class="n">0</td><td colspan="6" class="na">Henüz sonuçlanan yok${note ? ' · ' + note : ''}</td></tr>`;
-      return `<tr><td>${name}</td><td class="n">${s.n}</td><td class="n">${pct(s.exp)}</td><td class="n"><b>${pct(s.hit)}</b></td><td class="n">${t === 'cs' ? '–' : s.odd.toFixed(2)}</td><td class="n ${t === 'cs' ? '' : s.u >= 0 ? 'ok' : 'no'}">${t === 'cs' ? '–' : sg(s.u)}</td><td class="n">${s.llU != null ? `${s.llU.toFixed(3)} / ${s.llM.toFixed(3)}` : '–'}</td><td class="n">${t === 'cs' ? '–' : (s.mv >= 0 ? '+' : '') + (100 * s.mv).toFixed(1).replace('.', ',') + '%'}</td></tr>`; };
+      return `<tr><td>${name}</td><td class="n">${s.n}</td><td class="n">${pct(s.exp)}</td><td class="n"><b>${pct(s.hit)}</b></td><td class="n">${s.odd == null ? '–' : s.odd.toFixed(2)}</td><td class="n ${s.u == null ? '' : s.u >= 0 ? 'ok' : 'no'}">${s.u == null ? '–' : sg(s.u) + (s.nO < s.n ? ` <span class="na" title="Sadece iddaa oranı olan ${s.nO} seçim">(${s.nO})</span>` : '')}</td><td class="n">${s.llU != null ? `${s.llU.toFixed(3)} / ${s.llM.toFixed(3)}` : '–'}</td><td class="n">${t === 'cs' ? '–' : (s.mv >= 0 ? '+' : '') + (100 * s.mv).toFixed(1).replace('.', ',') + '%'}</td></tr>`; };
     const ms = msStats(by('ms'));
     const B = by('banko'); const bands = [[0, .6], [.6, .65], [.65, .7], [.7, .75], [.75, .8], [.8, 1.01]].map(([lo, hi]) => { const s = stats(B.filter(r => r.p >= lo && r.p < hi)); return { lo, hi, ...s }; }).filter(b => b.n);
     const days = {}; for (const r of B) if (r.res === true || r.res === false) (days[r.day] ||= []).push(r);
@@ -89,7 +103,7 @@
       <div class="pf-head"><p>${first ? `Kayıt ${first} tarihinden beri bu cihazda tutuluyor.` : 'Henüz kayıt yok: uygulama her açıldığında başlamamış maçların tahminleri kaydedilir.'} ${nOpen} maç henüz başlamadı, ${wait} maçın sonucu bekleniyor. Şut ve korner, maç bitince API-Football istatistiğinden puanlanır (büyük 7 lig).</p>
         <div class="chips" role="group" aria-label="Kapsam"><button type="button" data-pf="all" aria-pressed="${!scopeBig}">Tüm ligler</button><button type="button" data-pf="big" aria-pressed="${scopeBig}">Büyük 7 lig</button></div></div>
       <div class="tbl"><table><thead><tr><th>Tahmin</th><th class="n">Sonuçlanan</th><th class="n">Beklenen</th><th class="n">Tuttu</th><th class="n">Ort. oran</th><th class="n">Birim</th><th class="n" title="Bizim olasılık / iddaa adil olasılığı. Küçük olan daha isabetli.">Log-loss biz / piyasa</th><th class="n" title="Seçtiğimiz oran ilk görüldüğünden maç saatine kadar ne kadar düştü. Artı = piyasa bizim yönümüze geldi.">Oran hareketi</th></tr></thead><tbody>
-        ${row('Kuponlarım', 'kupon', 'alttaki kupondan kaydedilenler')}${row('Banko (1,30+)', 'banko')}${row('<span class="st">★</span> Model (şut)', 'star', 'maç istatistiği bekleniyor')}${row('<span class="di">◆</span> Piyasa', 'dia')}${row('Skor (3 skordan biri)', 'cs')}${row('Şut modeli (bütün çizgiler)', 'sut', 'büyük 7 lig')}${row('Korner modeli (bütün çizgiler)', 'kor', 'büyük 7 lig')}
+        ${row('Kuponlarım', 'kupon', 'alttaki kupondan kaydedilenler')}${row('Canlı beklenti', 'canli_b', 'maç bitince puanlanır')}${row('Canlı değerli', 'canli_d', 'maç bitince puanlanır')}${row('Banko (1,30+)', 'banko')}${row('<span class="st">★</span> Model (şut)', 'star', 'maç istatistiği bekleniyor')}${row('<span class="di">◆</span> Piyasa', 'dia')}${row('Skor (3 skordan biri)', 'cs')}${row('Şut modeli (bütün çizgiler)', 'sut', 'büyük 7 lig')}${row('Korner modeli (bütün çizgiler)', 'kor', 'büyük 7 lig')}
       </tbody></table></div>
       <p class="pf-note">${ms ? `<b>Piyasayı geçiyor muyuz? (büyük 7 lig, MS, ${ms.n} maç)</b> En olası sonuç bizde ${pct(ms.hitU)}, iddaa'da ${pct(ms.hitM)} tuttu. Log-loss bizde ${ms.llU.toFixed(4)}, iddaa'da ${ms.llM.toFixed(4)} (küçük olan daha isabetli; ${ms.llU < ms.llM ? 'şu an biz öndeyiz' : 'şu an piyasa önde'}). Anlamlı fark için birkaç yüz maç gerekir.` : '<b>Piyasayı geçiyor muyuz?</b> Büyük 7 ligde MS tahminimiz ile iddaa\'nın adil olasılığı her maçta karşılaştırılacak; ilk maçlar bitince burada görünür.'}</p>
       <div class="pf-grid">
@@ -97,12 +111,14 @@
         <div><h3>Birikimli banko sonucu (1 birim, iddaa oranı)</h3>${curve(B) || '<p class="na">En az iki sonuçlanan banko gerekiyor.</p>'}</div>
       </div>
       ${dayRows ? `<h3>Gün gün</h3><div class="tbl"><table><thead><tr><th>Gün</th><th class="n">Banko</th><th class="n">Beklenen</th><th class="n">Tuttu</th><th class="n">Birim</th><th class="n">Skor tuttu</th></tr></thead><tbody>${dayRows}</tbody></table></div>` : ''}
-      <div class="pf-foot"><button type="button" id="pfCsv">CSV indir</button><span class="na">Bütün kayıtlar (Excel'de açılır). Kayıtlar sadece bu cihazda; tarayıcı verisini silersen gider.</span></div>`;
+      <div class="pf-foot"><button type="button" id="pfCsv">CSV indir</button><button type="button" id="pfJson" title="Haftalık model güncellemesi için: tahminler, sonuçlar ve maç istatistikleri">Model verisini indir</button><span class="na">Bütün kayıtlar (Excel'de açılır). Kayıtlar sadece bu cihazda; tarayıcı verisini silersen gider.</span></div>`;
     el.querySelectorAll('[data-pf]').forEach(b => b.onclick = () => { scopeBig = b.dataset.pf === 'big'; render(el); });
+    el.querySelector('#pfJson').onclick = async () => { const R = await all(); const extra = {}; try { for (let k = 0; k < localStorage.length; k++) { const key = localStorage.key(k); if (/^mb_(st|af2)_/.test(key)) extra[key] = JSON.parse(localStorage.getItem(key)); } } catch (e) { }
+      const blob = new Blob([JSON.stringify({ v: 1, exported: new Date().toISOString(), records: R, cache: extra })], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'mac-bulteni-model-verisi-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.appendChild(a); a.click(); a.remove(); };
     el.querySelector('#pfCsv').onclick = async () => { const R = await all(); const cols = ['day', 'cn', 'h', 'a', 't', 'lab', 'p', 'fp', 'odd0', 'odd', 'res', 'sc', 'big'];
       const esc = v => { v = v == null ? '' : typeof v === 'number' ? String(v).replace('.', ',') : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
       const csv = '﻿' + ['gün;lig;ev;deplasman;tür;tahmin;olasılık;piyasa;ilk oran;son oran;sonuç;skor;büyük lig'].concat(R.filter(r => r.t !== 'ms').sort((a, b) => a.d - b.d).map(r => cols.map(c => esc(c === 'res' ? (r.res === true ? 'tuttu' : r.res === false ? 'yattı' : '') : r[c])).join(';'))).join('\n');
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'mac-bulteni-takip.csv'; document.body.appendChild(a); a.click(); a.remove(); };
   }
-  root.TRK = { capture, settle, pending, all, render, judge, needStat, STATK, saveCoupon };
+  root.TRK = { capture, settle, pending, all, render, judge, needStat, STATK, saveCoupon, saveLive, settleLive, pendingLiveDays };
 })(window);

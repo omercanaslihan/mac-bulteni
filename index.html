@@ -618,6 +618,8 @@ function startApp(BULTEN){
             const H=T.find(t=>t.team&&t.team.id===x.hid)||T[0], A=T.find(t=>t.team&&t.team.id===x.aid)||T[1];
             if(H&&A){ st={sh:[get(H,'Total Shots'),get(A,'Total Shots')],sot:[get(H,'Shots on Goal'),get(A,'Shots on Goal')],co:[get(H,'Corner Kicks'),get(A,'Corner Kicks')]}; if(st.sh[0]!=null||st.co[0]!=null) ls.set(ck,JSON.stringify(st)); else st=null; } }catch(e){} }
         if(st) x.stat=st; } }catch(e){}
+    // Canlı öneriler: günün skor listesinden fixture id ile
+    try{ const days=(await TRK.pendingLiveDays()).sort().slice(-4); const byFid=new Map(); for(const d of days){ const r=await afDay(d,key,false).catch(()=>null); if(!r) continue; for(const f of r.fx) byFid.set(f[11],{st:f[3],fh:f[7],fa:f[8],hh:f[9],ha:f[10]}); } if(byFid.size) await TRK.settleLive(byFid); }catch(e){}
     const n=await TRK.settle(res); if(!perf.hidden) TRK.render(document.getElementById('perfBody')); return n; }
   boot().then(()=>runScores(false));
   if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
