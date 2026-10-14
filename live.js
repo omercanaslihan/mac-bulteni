@@ -148,9 +148,9 @@
     </article>`; }
 
   function render() { const box = $('lvList'); if (!box) return;
-    const onlyB = $('lvAll') && !$('lvAll').checked; const list = fixtures.filter(x => !onlyB || x.iddI);
-    $('lvMsg').textContent = !ls.get('mb_afkey') ? 'Canlı skor ve dakika için üstteki Skorlar kutusuna API-Football anahtarını gir.' : `${fixtures.length} canlı maç, ${fixtures.filter(x => x.iddI).length} tanesi iddaa bülteninde.${left != null ? ` Bugün kalan istek: ${left}.` : ''}${lastAt ? ' Son yenileme ' + new Date(lastAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) + '.' : ''}`;
-    box.innerHTML = list.length ? list.map(card).join('') : (fixtures.length ? '<p class="empty">Bültendeki maçlardan şu an oynanan yok. "Bülten dışı maçlar" kutusunu işaretleyebilirsin.</p>' : (ls.get('mb_afkey') ? '<p class="empty">Şu an canlı maç yok ya da liste henüz alınmadı.</p>' : ''));
+    const list = fixtures.filter(x => x.iddI); // sadece iddaa bültenindeki maçlar
+    $('lvMsg').textContent = !ls.get('mb_afkey') ? 'Canlı skor ve dakika için üstteki Skorlar kutusuna API-Football anahtarını gir.' : `iddaa bülteninde ${list.length} canlı maç.${left != null ? ` Bugün kalan istek: ${left}.` : ''}${lastAt ? ' Son yenileme ' + new Date(lastAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) + '.' : ''}`;
+    box.innerHTML = list.length ? list.map(card).join('') : (fixtures.length ? '<p class="empty">iddaa bültenindeki maçlardan şu an oynanan yok.</p>' : (ls.get('mb_afkey') ? '<p class="empty">Şu an canlı maç yok ya da liste henüz alınmadı.</p>' : ''));
   }
 
   async function refresh() { if (busy) return; busy = true; const btn = $('lvRef'); if (btn) btn.disabled = true;
@@ -187,6 +187,6 @@
     if (ev.target.id === 'lvRef') refresh();
     const s = ev.target.closest('.lv-st'); if (s) { s.disabled = true; getStats(s.dataset.f); }
   });
-  document.addEventListener('change', ev => { if (ev.target.id === 'lvAll') render(); if (ev.target.id === 'lvAuto') setAuto(ev.target.checked); });
+  document.addEventListener('change', ev => { if (ev.target.id === 'lvAuto') setAuto(ev.target.checked); });
   root.LIVE = { refresh, render };
 })(window);
