@@ -146,6 +146,11 @@
   // Maç sonu skor dağılımı: 'h:a' → olasılık
   function scoreDist(states) { const D = {}; for (const [i, j, k, l, p] of states) { const key = (i + k) + ':' + (j + l); D[key] = (D[key] || 0) + p; } return D; }
   // En olası 3 skor: piyasadan çıkarılan gol beklentisi (+ büyük liglerde %25 model, + iddaa skor pazarı varsa %50)
+  // Dixon–Coles düşük skor düzeltmesi (rho=-0,1): 0–0 ve 1–1 bağımsız Poisson'da az çıkıyor.
+  // Geri test (2.817 maç): beraberlik %22,8→%24,9 (gerçek %26,1), 3 skor isabeti %33,7→%35,0, skor log-loss 2,8749→2,8734.
+  const DC_RHO = -0.1;
+  function dcAdjust(D, lam, mu) { if (!D || !(lam > 0) || !(mu > 0)) return D; const r = DC_RHO; const f = { '0:0': 1 - lam * mu * r, '0:1': 1 + lam * r, '1:0': 1 + mu * r, '1:1': 1 - r };
+    const out = {}; let T = 0; for (const [k, p] of Object.entries(D)) { const v = p * (f[k] ?? 1); out[k] = v; T += v; } for (const k in out) out[k] /= T; return out; }
   function topScores(mkt, mod, mk) { const D = {}; const add = (src, w) => { for (const [k, p] of Object.entries(src)) D[k] = (D[k] || 0) + w * p; };
     let wM = 1; if (mod) { add(mod, 0.25); wM = 0.75; }
     const cs = mk.find(m => m[0] === '2_86' && m[2].length >= 10 && m[2].every(o => o[1] > 1.01));
@@ -168,7 +173,7 @@
     if (lgk && M.X[lgk]) { const T = M.TEAMS[lgk]; const h = matchTeam(T, raw.hn), a = matchTeam(T, raw.an);
       if (h && a && h[0] !== a[0]) { MP = modelProbs(M, lgk, h[0], a[0], raw.hn, raw.an, mk); if (MP) { e.xg = MP.xg; e.mean = MP.mean; const C = M.cnt[lgk] || {}; e.few = ((C[h[0]] || 0) < 10 || (C[a[0]] || 0) < 10) ? 1 : 0; e.hid = h[0]; e.aid = a[0]; } }
       if (!MP) e.big = 0; }
-    if (states || MP) e.cs = topScores(states ? scoreDist(states) : null, MP ? scoreDist(MP.states) : null, mk);
+    if (states || MP) e.cs = topScores(states ? dcAdjust(scoreDist(states), e.fit && e.fit[0], e.fit && e.fit[1]) : null, MP ? dcAdjust(scoreDist(MP.states), MP.xg[0], MP.xg[1]) : null, mk);
     for (const [key, s, os, mbc] of mk) { const row = [key, s, [], mbc]; const mrow = MP ? MP.P[key + '|' + s] : null;
       for (const [n, odd] of os) { const fp = states && odd > 1.01 && GOALKEYS.has(key) ? goalProb(key, n, s, states, 1) : null;
         row[2].push([n, odd, mrow ? (mrow[n] ?? null) : null, fp == null ? null : +fp.toFixed(4)]); }
