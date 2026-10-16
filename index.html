@@ -577,6 +577,12 @@ function startApp(BULTEN){
   }
   // ---- Skorlar: API-Football (anahtar sadece bu cihazda saklanır) ----
   const AF='https://v3.football.api-sports.io';
+  // API-Football: ücretsiz planda dakikada ~10 istek. Bütün istekler sıraya girer, aralarında en az 6,7 sn olur.
+  let afChain=Promise.resolve(), afLast=0, afLeft=null, afN=0;
+  window.afFetch=(url,key)=>{ const job=afChain.then(async()=>{ const w=afLast+6700-Date.now(); if(w>0) await new Promise(r=>setTimeout(r,w)); afLast=Date.now(); afN++;
+      const r=await fetch(url,{headers:{'x-apisports-key':key}}); const rl=r.headers.get('x-ratelimit-requests-remaining'); if(rl!=null) afLeft=+rl; return r; });
+    afChain=job.catch(()=>{}); return job; };
+  window.afLeft=()=>afLeft;
   const ls={ get:k=>{ try{return localStorage.getItem(k);}catch(e){return null;} }, set:(k,v)=>{ try{localStorage.setItem(k,v);}catch(e){} }, del:k=>{ try{localStorage.removeItem(k);}catch(e){} } };
   const afBox=document.getElementById('afBox'), afKey=document.getElementById('afKey'), afMsg=document.getElementById('afMsg'), afBtn=document.getElementById('afBtn');
   afBtn.onclick=()=>{ afBox.hidden=!afBox.hidden; afKey.value=ls.get('mb_afkey')||''; };
@@ -586,7 +592,7 @@ function startApp(BULTEN){
   async function afDay(day,key,force){ const ck='mb_af2_'+day; let c=null; try{ c=JSON.parse(ls.get(ck)||'null'); }catch(e){}
     const today=dayOf(Date.now()/1000); const fresh=c&&((day!==today&&c.done)||(Date.now()-c.t<8*60e3));
     if(c&&fresh&&!force) return {fx:c.fx,cached:true};
-    const r=await fetch(AF+'/fixtures?date='+day+'&timezone=Europe/Istanbul',{headers:{'x-apisports-key':key}});
+    const r=await afFetch(AF+'/fixtures?date='+day+'&timezone=Europe/Istanbul',key);
     const j=await r.json().catch(()=>null); if(!r.ok||!j) throw new Error('HTTP '+r.status);
     const errs=j.errors&&(Array.isArray(j.errors)?j.errors.length:Object.keys(j.errors).length)?j.errors:null;
     if(errs) throw new Error(Object.values(errs).join(' '));
@@ -600,7 +606,7 @@ function startApp(BULTEN){
       if(best){ e.res={st:best[3],el:best[4],gh:best[5],ga:best[6],fh:best[7],fa:best[8],hh:best[9],ha:best[10],fid:best[11],hid:best[12],aid:best[13]}; n++; } } return n; }
   async function runScores(force){ const key=ls.get('mb_afkey'); afBtn.hidden=false; pfBtn.hidden=false; if(!key||!window.__app) return;
     const D=window.__app.D; const now=Date.now()/1000; const days=[...new Set(D.events.filter(e=>e.d<now+600).map(e=>dayOf(e.d)))].sort().slice(-2);
-    if(!days.length){ try{ const r=await fetch(AF+'/status',{headers:{'x-apisports-key':key}}); const j=await r.json(); const er=j&&j.errors&&(Array.isArray(j.errors)?j.errors.length:Object.keys(j.errors).length)?Object.values(j.errors).join(' '):null;
+    if(!days.length){ try{ const r=await afFetch(AF+'/status',key); const j=await r.json(); const er=j&&j.errors&&(Array.isArray(j.errors)?j.errors.length:Object.keys(j.errors).length)?Object.values(j.errors).join(' '):null;
         if(er||!j||!j.response||Array.isArray(j.response)) afMsg.textContent='Anahtar doğrulanamadı: '+(er||'API yanıt vermedi')+'. Anahtarı kontrol edip tekrar kaydet.';
         else { const R=j.response, q=R.requests||{}, pl=(R.subscription||{}).plan||'?'; afMsg.textContent=`Anahtar geçerli (plan: ${pl}, bugün ${q.current??0}/${q.limit_day??'?'} istek kullanıldı). Bu cihazda henüz başlamış maç yok; ilk maç başlayınca skorlar kendiliğinden gelecek.`; } }
       catch(e){ afMsg.textContent='API-Football\'a ulaşılamadı. Reklam engelleyici, şirket ağı ya da tarayıcının izleme koruması engelliyor olabilir. Kontrol için yeni sekmede v3.football.api-sports.io/status adresini aç.'; } return; }
@@ -613,19 +619,23 @@ function startApp(BULTEN){
   const pfBtn=document.getElementById('pfBtn'), perf=document.getElementById('perf');
   pfBtn.onclick=async()=>{ perf.hidden=!perf.hidden; if(!perf.hidden){ await TRK.render(document.getElementById('perfBody')); perf.scrollIntoView({behavior:'smooth',block:'start'}); } };
   async function settleAll(key,D){ const res=new Map(); for(const e of D.events) if(e.res) res.set(e.i,e.res);
-    try{ const P=(await TRK.pending()).filter(r=>!res.has(r.i)); const days=[...new Set(P.map(r=>dayOf(r.d)))].sort().slice(-4);
-      for(const d of days){ const r=await afDay(d,key,false).catch(()=>null); if(!r) continue; const objs=[...new Map(P.filter(x=>dayOf(x.d)===d).map(x=>[x.i,{i:x.i,d:x.d,h:x.h,a:x.a}])).values()]; attach(objs,r.fx); for(const o of objs) if(o.res) res.set(o.i,o.res); } }catch(e){}
+    try{ const P=(await TRK.pending()).filter(r=>!res.has(r.i)); const days=[...new Set(P.map(r=>dayOf(r.d)))].sort().slice(0,5); // en eski bekleyen günden başla
+      let di=0; for(const d of days){ di++; afMsg.textContent=`Geçmiş sonuçlar işleniyor: ${d} (${di}/${days.length})… sayfayı açık tut.`; const r=await afDay(d,key,false).catch(()=>null); if(!r) continue; const objs=[...new Map(P.filter(x=>dayOf(x.d)===d).map(x=>[x.i,{i:x.i,d:x.d,h:x.h,a:x.a}])).values()]; attach(objs,r.fx); for(const o of objs) if(o.res) res.set(o.i,o.res); } }catch(e){}
+    // Gol sonuçlarını hemen puanla (istatistik beklemeden)
+    try{ await TRK.settle(res); if(!perf.hidden) TRK.render(document.getElementById('perfBody')); }catch(e){}
     // Şut/korner: biten büyük lig maçları için maç istatistiği (maç başına 1 istek, en fazla 25/açılış, cihazda saklanır)
     try{ const need=new Set((await TRK.all()).flatMap(r=>r.t==='kupon'?(r.res==null?r.legs:[]):[r]).filter(r=>TRK.needStat(r)&&res.has(r.i)&&['FT','AET','PEN'].includes(res.get(r.i).st)&&res.get(r.i).fid).map(r=>r.i)); let q=0;
       for(const i of need){ const x=res.get(i); const ck='mb_st_'+x.fid; let st=null; try{ st=JSON.parse(ls.get(ck)||'null'); }catch(e){}
-        if(!st){ if(q>=25) continue; q++; try{ const r=await fetch(AF+'/fixtures/statistics?fixture='+x.fid,{headers:{'x-apisports-key':key}}); const j=await r.json();
+        if(!st){ if(q>=10||(afLeft!=null&&afLeft<15)) continue; q++; afMsg.textContent=`Maç istatistikleri alınıyor (${q})… sayfayı açık tut.`; try{ const r=await afFetch(AF+'/fixtures/statistics?fixture='+x.fid,key); const j=await r.json();
             const T=j&&j.response||[]; const get=(t,name)=>{ const v=(t.statistics||[]).find(z=>z.type===name); return v&&v.value!=null?+v.value:null; };
             const H=T.find(t=>t.team&&t.team.id===x.hid)||T[0], A=T.find(t=>t.team&&t.team.id===x.aid)||T[1];
             if(H&&A){ st={sh:[get(H,'Total Shots'),get(A,'Total Shots')],sot:[get(H,'Shots on Goal'),get(A,'Shots on Goal')],co:[get(H,'Corner Kicks'),get(A,'Corner Kicks')]}; if(st.sh[0]!=null||st.co[0]!=null) ls.set(ck,JSON.stringify(st)); else st=null; } }catch(e){} }
         if(st) x.stat=st; } }catch(e){}
     // Canlı öneriler: günün skor listesinden fixture id ile
-    try{ const days=(await TRK.pendingLiveDays()).sort().slice(-4); const byFid=new Map(); for(const d of days){ const r=await afDay(d,key,false).catch(()=>null); if(!r) continue; for(const f of r.fx) byFid.set(f[11],{st:f[3],fh:f[7],fa:f[8],hh:f[9],ha:f[10]}); } if(byFid.size) await TRK.settleLive(byFid); }catch(e){}
-    const n=await TRK.settle(res); if(!perf.hidden) TRK.render(document.getElementById('perfBody')); return n; }
+    try{ const days=(await TRK.pendingLiveDays()).sort().slice(0,3); const byFid=new Map(); for(const d of days){ const r=await afDay(d,key,false).catch(()=>null); if(!r) continue; for(const f of r.fx) byFid.set(f[11],{st:f[3],fh:f[7],fa:f[8],hh:f[9],ha:f[10]}); } if(byFid.size) await TRK.settleLive(byFid); }catch(e){}
+    const n=await TRK.settle(res); if(!perf.hidden) TRK.render(document.getElementById('perfBody'));
+    try{ const left=(await TRK.pending()).length; afMsg.textContent=`Sonuçlar işlendi.${left?` ${left} kayıt hâlâ sonuç bekliyor; bir sonraki açılışta devam edecek.`:''}${afLeft!=null?` Bugün kalan istek: ${afLeft}.`:''}`; }catch(e){}
+    return n; }
   boot().then(()=>runScores(false));
   if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();

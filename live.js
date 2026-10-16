@@ -16,7 +16,7 @@
   const snapDB = () => new Promise((res, rej) => { const q = indexedDB.open('mb-snap', 1); q.onupgradeneeded = () => q.result.createObjectStore('ev', { keyPath: 'i' }); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
   async function snaps() { try { const db = await snapDB(); return await new Promise((res, rej) => { const q = db.transaction('ev').objectStore('ev').getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } catch (e) { return []; } }
 
-  async function afGet(path) { const key = ls.get('mb_afkey'); if (!key) throw new Error('nokey'); const r = await fetch(AF + path, { headers: { 'x-apisports-key': key } });
+  async function afGet(path) { const key = ls.get('mb_afkey'); if (!key) throw new Error('nokey'); const r = root.afFetch ? await root.afFetch(AF + path, key) : await fetch(AF + path, { headers: { 'x-apisports-key': key } });
     const j = await r.json(); const rl = r.headers.get('x-ratelimit-requests-remaining'); if (rl != null) left = rl;
     const er = j && j.errors && (Array.isArray(j.errors) ? j.errors.length : Object.keys(j.errors).length) ? Object.values(j.errors).join(' ') : null; if (er) throw new Error(er); return j.response || []; }
 
