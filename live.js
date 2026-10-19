@@ -31,7 +31,7 @@
     if (S && done > 0.08) { // tempo: gerçekleşen xG (ya da şuttan tahmin) / beklenen
       const xg = (T, lam) => { const e = statOf(T, 'expected_goals'); if (e != null) return { v: e, src: 'xG' }; const sot = statOf(T, 'Shots on Goal'), sh = statOf(T, 'Total Shots'); if (sot == null || sh == null) return null; return { v: 0.28 * sot + 0.04 * Math.max(0, sh - sot), src: 'şut' }; };
       const h = xg(S.H, lam0), a = xg(S.A, mu0);
-      if (h && a) { const k = 1.0, eh = lam0 * done, ea = mu0 * done; mH = Math.min(1.6, Math.max(0.6, (h.v + k * lam0) / (eh + k * lam0))); mA = Math.min(1.6, Math.max(0.6, (a.v + k * mu0) / (ea + k * mu0))); why = { h: h.v, a: a.v, eh, ea, src: h.src }; }
+      if (h && a) { const k = 1.5, eh = lam0 * done, ea = mu0 * done; mH = Math.min(1.4, Math.max(0.7, (h.v + k * lam0) / (eh + k * lam0))); mA = Math.min(1.4, Math.max(0.7, (a.v + k * mu0) / (ea + k * mu0))); why = { h: h.v, a: a.v, eh, ea, src: h.src }; }
     }
     if (S) { const rh = statOf(S.H, 'Red Cards') || 0, ra = statOf(S.A, 'Red Cards') || 0; if (rh) { mH *= Math.pow(0.7, rh); mA *= Math.pow(1.25, rh); } if (ra) { mA *= Math.pow(0.7, ra); mH *= Math.pow(1.25, ra); } }
     const lr = lam0 * rf * mH, ur = mu0 * rf * mA, gh = x.gh || 0, ga = x.ga || 0;
@@ -102,7 +102,7 @@
     if (x.st === '1H') { for (const d of [0.5, 1.5]) C.push({ type: 'ou', scope: 'iy', side: 'top', L: t + d, n: 'Üst' }); C.push({ type: 'ou', scope: 'iy', side: 'ev', L: gh + 0.5, n: 'Üst' }, { type: 'ou', scope: 'iy', side: 'dep', L: ga + 0.5, n: 'Üst' }); }
     return C; }
   const keyOf = c => [c.type, c.scope, c.side, c.L ?? '', c.n].join('|');
-  function expectList(x, m) { const mk = new Map(liveMarkets(x).map(c => [keyOf(c), c])); const S = stats[x.fid] && stats[x.fid].v; const w = x.pre ? (S ? 0.5 : 0.35) : 0.25;
+  function expectList(x, m) { const mk = new Map(liveMarkets(x).map(c => [keyOf(c), c])); const S = stats[x.fid] && stats[x.fid].v; const w = x.pre ? (S ? 0.3 : 0.2) : 0.15; // ilk haftada canlı model iddaa'dan isabetsiz çıktı (240 öneri: %73 beklenip %68)
     const out = []; for (const c of modelCands(x, m)) { const pm = ourP(x, m, c); if (pm == null) continue; const k = mk.get(keyOf(c)); const p = k ? w * pm + (1 - w) * k.fair : pm;
       if (p < 0.55 || p > 0.93) continue; if (k && k.odd < 1.3) continue; out.push({ ...c, pm, p, odd: k ? k.odd : null, fair: k ? k.fair : null, edge: k ? p * k.odd - 1 : null, lab: label(x, c) }); }
     out.sort((a, b) => b.p - a.p); const seen = new Set(); const pick = []; let alive = m.dist.slice(); let other = 1;
@@ -114,7 +114,7 @@
       seen.add(g); pick.push(c); alive = nextAlive; other = nextOther; }
     pick.joint = alive.reduce((t, z) => t + z[2], 0) * other; pick.alive = alive; return pick; }
 
-  function suggest(x, m) { const S = stats[x.fid] && stats[x.fid].v; const w = x.pre ? (S ? 0.5 : 0.35) : 0.25; // modelin payı: maç öncesi veri ve istatistik varsa daha yüksek
+  function suggest(x, m) { const S = stats[x.fid] && stats[x.fid].v; const w = x.pre ? (S ? 0.3 : 0.2) : 0.15; // ilk haftada canlı model iddaa'dan isabetsiz çıktı (240 öneri: %73 beklenip %68) // modelin payı: maç öncesi veri ve istatistik varsa daha yüksek
     const C = liveMarkets(x).map(c => { const pm = ourP(x, m, c); if (pm == null) return null; const p = w * pm + (1 - w) * c.fair; return { ...c, pm, p, edge: p * c.odd - 1, lab: label(x, c) }; }).filter(Boolean);
     const minEdge = 0.04;
     const good = C.filter(c => c.odd >= 1.2 && c.odd <= 6 && c.p >= 0.4 && c.edge >= minEdge && c.p - c.fair >= 0.03).sort((a, b) => b.edge - a.edge);

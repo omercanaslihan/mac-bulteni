@@ -64,6 +64,9 @@
   async function settleLive(byFid) { try { const db = await open(); const rs = (await all()).filter(r => r.t && r.t.startsWith('canli') && r.res == null); const tx = db.transaction('r', 'readwrite'); const st = tx.objectStore('r'); let n = 0;
       for (const r of rs) { const x = byFid.get(r.fid); if (!x || !FIN.has(x.st)) continue; const v = judgeLive(r, x); r.res = v == null ? 'na' : v; r.sc = x.fh + ':' + x.fa; st.put(r); n++; } await done(tx); return n; } catch (e) { return 0; } }
   async function pendingLiveDays() { const now = Date.now() / 1000; const D = new Set(); for (const r of await all()) if (r.t && r.t.startsWith('canli') && r.res == null && r.d < now - 2 * 3600 && r.d > now - 10 * 86400) D.add(r.day); return [...D]; }
+  // Günün maç listesi tamamlandığı halde eşleşmeyen kayıtlar (API'de olmayan maçlar) kuyruğu tıkamasın
+  async function expireDays(days) { if (!days.length) return 0; const D = new Set(days); try { const db = await open(); const rs = (await all()).filter(r => r.res == null && r.t !== 'kupon' && !String(r.t).startsWith('canli') && D.has(r.day)); if (!rs.length) return 0;
+      const tx = db.transaction('r', 'readwrite'); const st = tx.objectStore('r'); for (const r of rs) { r.res = 'na'; r.why = 'skor bulunamadı'; st.put(r); } await done(tx); return rs.length; } catch (e) { return 0; } }
   async function pending() { const now = Date.now() / 1000; const out = []; for (const r of await all()) { if (r.res != null || r.d > now - 2.5 * 3600 || r.d < now - 10 * 86400) continue; if (r.t === 'kupon') { for (const l of r.legs) if (l.d < now - 2.5 * 3600) out.push({ i: l.i, d: l.d, h: l.h, a: l.a }); } else out.push(r); } return out; }
 
   // ---------- Görünüm ----------
@@ -120,5 +123,5 @@
       const csv = '﻿' + ['gün;lig;ev;deplasman;tür;tahmin;olasılık;piyasa;ilk oran;son oran;sonuç;skor;büyük lig'].concat(R.filter(r => r.t !== 'ms').sort((a, b) => a.d - b.d).map(r => cols.map(c => esc(c === 'res' ? (r.res === true ? 'tuttu' : r.res === false ? 'yattı' : '') : r[c])).join(';'))).join('\n');
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'mac-bulteni-takip.csv'; document.body.appendChild(a); a.click(); a.remove(); };
   }
-  root.TRK = { capture, settle, pending, all, render, judge, needStat, STATK, saveCoupon, saveLive, settleLive, pendingLiveDays };
+  root.TRK = { expireDays, capture, settle, pending, all, render, judge, needStat, STATK, saveCoupon, saveLive, settleLive, pendingLiveDays };
 })(window);
